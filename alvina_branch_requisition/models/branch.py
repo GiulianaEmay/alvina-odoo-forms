@@ -15,6 +15,12 @@ class BranchBinding(models.Model):
                                         default=lambda self: self.env.company)
     warehouse_id = fields.Many2one('stock.warehouse', string='Almacén abastecedor', required=True)
     user_ids = fields.Many2many('res.users', string='Usuarios autorizados')
+    generate_purchase_rfq = fields.Boolean(
+        string='Crear solicitud de cotización', default=False,
+        help='Solo para nuevos envíos. Crea una cotización en borrador en la empresa solicitante.')
+    purchase_picking_type_id = fields.Many2one(
+        'stock.picking.type', string='Recepción de la sucursal',
+        help='Operación de recepción de la empresa solicitante, distinta del almacén abastecedor.')
     _check_company_auto = True
     _unique_resource = models.Constraint('UNIQUE(resource_ref)', 'La sucursal ya está vinculada.')
 
@@ -80,6 +86,20 @@ class BranchBinding(models.Model):
             if self.env['alvina.branch.request'].sudo().search_count([('branch_id', 'in', self.ids)]):
                 raise ValidationError(_('Cambiar una sucursal o almacén con historial requiere una migración controlada.'))
         return super().write(vals)
+
+    @api.constrains('generate_purchase_rfq', 'purchase_picking_type_id', 'company_id', 'supply_company_id')
+    def _check_purchase_configuration(self):
+        for rec in self:
+            if not rec.generate_purchase_rfq:
+                continue
+            # Portal requesters can submit without general inventory access.
+            # Read only the operation already chosen by the administrator.
+            operation = rec.sudo().purchase_picking_type_id
+            if not operation or not operation.active or operation.code != 'incoming' or operation.company_id != rec.company_id:
+                raise ValidationError(_('Seleccione una recepción activa de la empresa solicitante para crear cotizaciones.'))
+            vendor = rec.supply_company_id.sudo().partner_id
+            if not vendor.active or (vendor.company_id and vendor.company_id != rec.company_id):
+                raise ValidationError(_('El contacto proveedor de la empresa abastecedora debe estar activo y disponible para la empresa solicitante.'))
 
 class ProductTemplate(models.Model):
     _inherit = 'product.template'

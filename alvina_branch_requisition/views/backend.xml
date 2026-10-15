@@ -9,6 +9,7 @@
                 <field name="company_id" />
                 <field name="supply_company_id" />
                 <field name="warehouse_id" />
+                <field name="generate_purchase_rfq" />
                 <field name="active" />
             </list>
         </field>
@@ -25,6 +26,10 @@
                         <field name="supply_company_id" />
                         <field name="warehouse_id" domain="[('company_id', '=', supply_company_id)]" />
                         <field name="user_ids" widget="many2many_tags" />
+                        <field name="generate_purchase_rfq" />
+                        <field name="purchase_picking_type_id"
+                               domain="[('code', '=', 'incoming'), ('company_id', '=', company_id)]"
+                               invisible="not generate_purchase_rfq" required="generate_purchase_rfq" />
                         <field name="active" />
                     </group>
                 </sheet>
@@ -42,6 +47,10 @@
                 <field name="required_date" />
                 <field name="state" />
                 <field name="user_id" />
+                <field name="purchase_order_id" options="{'no_open': True}" />
+                <field name="currency_id" column_invisible="True" />
+                <field name="amount_total" />
+                <field name="price_snapshot_set" optional="hide" />
             </list>
         </field>
     </record>
@@ -60,6 +69,10 @@
                 <field name="product_qty" />
                 <field name="qty_supplied" />
                 <field name="qty_pending" />
+                <field name="currency_id" column_invisible="True" />
+                <field name="price_unit" />
+                <field name="price_subtotal" />
+                <field name="price_snapshot_set" optional="hide" />
             </list>
         </field>
     </record>
@@ -87,6 +100,8 @@
                     <field name="state" widget="statusbar" />
                 </header>
                 <sheet>
+                    <div class="alert alert-warning" role="status" invisible="price_snapshot_set">Registro histórico sin precio de venta capturado. Los importes en cero no representan una valorización histórica.</div>
+                    <div class="alert alert-info" role="status">Valor solicitado referencial, antes de impuestos. No acredita una entrega ni modifica existencias.</div>
                     <group>
                         <field name="name" />
                         <field name="branch_id" />
@@ -96,6 +111,10 @@
                         <field name="note" />
                         <field name="company_id" options="{'no_open': True}" />
                         <field name="supply_company_id" options="{'no_open': True}" />
+                        <field name="purchase_order_id" options="{'no_open': True}" />
+                        <field name="currency_id" />
+                        <field name="amount_total" />
+                        <field name="price_snapshot_set" invisible="True" />
                     </group>
                     <field name="line_ids">
                         <list create="0" delete="0">
@@ -104,6 +123,9 @@
                             <field name="product_qty" />
                             <field name="qty_supplied" />
                             <field name="qty_pending" />
+                            <field name="currency_id" column_invisible="True" />
+                            <field name="price_unit" />
+                            <field name="price_subtotal" />
                         </list>
                     </field>
                 </sheet>

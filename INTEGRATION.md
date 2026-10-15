@@ -89,7 +89,7 @@ Ese addon ya existe en el ZIP y es distinto del nuevo desarrollo:
 | --- | --- | --- |
 | Objeto principal | `alvina.stock.request`, `models/request.py:16` | `alvina.branch.request` |
 | Destino | `alvina.stock.department`, `models/department.py:6` | Vínculo con la sucursal real |
-| Función | Solicitudes de insumos, credenciales QR/Code128 y entrega autorizada mediante traslado interno | Formulario de sucursales y necesidades pendientes de compra; sin generar compras o traslados |
+| Función | Solicitudes de insumos, credenciales QR/Code128 y entrega autorizada mediante traslado interno | Formulario de sucursales y consolidado; desde 19.0.1.2.0 puede crear cotizaciones en borrador si se habilita por vínculo, sin confirmar compras ni generar traslados |
 | Navegación | Aplicación raíz propia, `views/menus.xml:2`, `application=True` en `__manifest__.py:28` | Submenús de Compras, sin aplicación raíz |
 | Almacén | Código `INS` y rutas específicas validadas en `models/department.py:21` | Almacén abastecedor configurado por vínculo, sin asumir un código global |
 

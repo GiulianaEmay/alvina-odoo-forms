@@ -1,6 +1,7 @@
 from odoo import api, fields, models, _
 from odoo.exceptions import AccessError, ValidationError
 from contextvars import ContextVar
+import math
 _CREATING = ContextVar("alvina_creating", default=False)
 
 from .validation import CATEGORIES, pending, quantity
@@ -23,8 +24,18 @@ class BranchRequest(models.Model):
     state = fields.Selection([('pending', 'Pendiente'), ('review', 'En revisión'),
         ('partial', 'Parcialmente atendido'), ('done', 'Atendido'), ('cancel', 'Cancelado')], default='pending', required=True, readonly=True)
     line_ids = fields.One2many('alvina.branch.request.line', 'request_id', copy=False)
+    currency_id = fields.Many2one(related='company_id.currency_id', store=True, string='Moneda')
+    amount_total = fields.Monetary(compute='_compute_amount_total', store=True, string='Valor solicitado')
+    price_snapshot_set = fields.Boolean(compute='_compute_amount_total', store=True,
+                                        string='Precio registrado al solicitar')
     submission_key = fields.Char(required=True, readonly=True, copy=False)
     _submission_unique = models.Constraint('UNIQUE(submission_key)', 'Este formulario ya fue enviado.')
+
+    @api.depends('line_ids.price_subtotal', 'line_ids.price_snapshot_set')
+    def _compute_amount_total(self):
+        for rec in self:
+            rec.amount_total = sum(rec.line_ids.mapped('price_subtotal'))
+            rec.price_snapshot_set = bool(rec.line_ids) and all(rec.line_ids.mapped('price_snapshot_set'))
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -33,7 +44,9 @@ class BranchRequest(models.Model):
                             'state', 'user_id', 'name', 'request_date'}:
                 raise AccessError(_('Campos de solicitud no autorizados.'))
             branch = self.env['alvina.branch.binding'].browse(vals.get('branch_id')).exists()
-            if not branch or not branch.active or self.env.user not in branch.user_ids or branch.company_id not in self.env.companies:
+            if (not branch or not branch.active
+                    or self.env.uid not in branch.sudo().user_ids.ids
+                    or branch.company_id not in self.env.companies):
                 raise AccessError(_('Sucursal no autorizada.'))
             if not branch._resource_is_available():
                 raise ValidationError(_('La sucursal vinculada ya no está disponible en esta compañía.'))
@@ -47,7 +60,9 @@ class BranchRequest(models.Model):
                         name=self.env['ir.sequence'].sudo().next_by_code('alvina.branch.request'))
         token = _CREATING.set(True)
         try:
-            records = super().create(vals_list)
+            clean_context = {key: value for key, value in self.env.context.items()
+                             if not key.startswith('default_')}
+            records = super(BranchRequest, self.with_context(clean_context)).create(vals_list)
             if any(not rec.line_ids for rec in records):
                 raise ValidationError(_('Ingrese al menos un producto.'))
             return records
@@ -98,6 +113,10 @@ class RequestLine(models.Model):
     product_qty = fields.Float(required=True, digits='Product Unit')
     qty_supplied = fields.Float(default=0, readonly=True, digits='Product Unit')
     qty_pending = fields.Float(compute='_compute_pending', store=True, digits='Product Unit')
+    currency_id = fields.Many2one(related='request_id.currency_id', store=True, string='Moneda')
+    price_unit = fields.Float(string='Precio de venta registrado', readonly=True, digits='Product Price')
+    price_snapshot_set = fields.Boolean(default=False, readonly=True, string='Precio registrado al solicitar')
+    price_subtotal = fields.Monetary(compute='_compute_price_subtotal', store=True, string='Valor solicitado')
     _product_unique = models.Constraint('UNIQUE(request_id, product_id)', 'No repita productos.')
     _positive = models.Constraint('CHECK(product_qty > 0 AND qty_supplied >= 0 AND qty_supplied <= product_qty)', 'Cantidades inválidas.')
 
@@ -105,6 +124,11 @@ class RequestLine(models.Model):
     def _compute_pending(self):
         for line in self:
             line.qty_pending = pending(line.product_qty, line.qty_supplied)
+
+    @api.depends('price_unit', 'product_qty', 'currency_id')
+    def _compute_price_subtotal(self):
+        for line in self:
+            line.price_subtotal = line.currency_id.round(line.price_unit * line.product_qty) if line.currency_id else 0
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -126,6 +150,17 @@ class RequestLine(models.Model):
             request = self.env['alvina.branch.request'].browse(vals.get('request_id'))
             if request.user_id != self.env.user or request.state != 'pending':
                 raise AccessError(_('Requerimiento no autorizado.'))
+            # Capture the actual product sale price (including variant extras),
+            # in its source currency. Never substitute the inventory cost or a
+            # vendor price. Shared products use the main company's sale currency.
+            company = request.company_id
+            sale_product = product.with_context({})
+            price = sale_product.currency_id._convert(
+                sale_product.lst_price, company.currency_id, company,
+                fields.Date.to_date(request.request_date), round=False)
+            if not math.isfinite(price) or price < 0:
+                raise ValidationError(_('El producto tiene un precio de venta inválido.'))
+            vals.update(price_unit=price, price_snapshot_set=True)
         return super().create(vals_list)
 
     @api.constrains('product_id', 'product_qty', 'request_id', 'supply_company_id')

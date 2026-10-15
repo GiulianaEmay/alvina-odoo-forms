@@ -1,4 +1,4 @@
-"""Probe a real 19.0.1.0.1 -> 19.0.1.1.0 upgrade in a disposable Odoo database.
+"""Probe real upgrades from 19.0.1.0.1 through the current addon version.
 
 Execute with ``odoo-bin shell`` and stdin redirection. Use
 ``ALVINA_SUPPLY_UPGRADE_PHASE=prepare`` with the old addon installed, then
@@ -137,7 +137,7 @@ if phase == 'prepare':
     print('SUPPLY_UPGRADE_PREPARED: 2 companies, 2 bindings, 2 historical requests; '
           'one archived binding; no supplier access granted to requesters')
 elif phase == 'verify':
-    assert module.installed_version == '19.0.1.1.0', module.installed_version
+    assert module.installed_version in ('19.0.1.1.0', '19.0.1.2.0'), module.installed_version
     raw_snapshot = parameters.get_param(snapshot_key)
     assert raw_snapshot, 'Run prepare on the baseline addon before upgrading'
     snapshot = json.loads(raw_snapshot)
@@ -151,6 +151,9 @@ elif phase == 'verify':
         assert binding.resource_ref._name + ',' + str(binding.resource_ref.id) == item['resource_ref']
         assert binding.active == item['active']
         assert sorted(binding.user_ids.ids) == item['user_ids']
+        if module.installed_version == '19.0.1.2.0':
+            assert not binding.generate_purchase_rfq
+            assert not binding.purchase_picking_type_id
         for user in binding.user_ids:
             assert sorted(user.company_ids.ids) == item['user_company_ids']
             assert user.company_id.id == item['user_default_company_id']
@@ -161,6 +164,19 @@ elif phase == 'verify':
         assert request.warehouse_id == request.branch_id.warehouse_id
         assert request.line_ids.mapped('supply_company_id') == request.supply_company_id
         assert request.line_ids.mapped('warehouse_id') == request.warehouse_id
+        if module.installed_version == '19.0.1.2.0':
+            # Historical demand has no reliable historical sale-price snapshot.
+            # Upgrading must neither value it at today's prices nor create RFQs.
+            assert request.currency_id == request.company_id.currency_id
+            assert request.line_ids.mapped('currency_id') == request.currency_id
+            assert not request.price_snapshot_set
+            assert request.amount_total == 0
+            assert not request.purchase_order_id
+            assert not request.purchase_order_ids
+            for line in request.line_ids:
+                assert not line.price_snapshot_set
+                assert line.price_unit == 0
+                assert line.price_subtotal == 0
     migration = runpy.run_path(file_path(
         'alvina_branch_requisition/migrations/19.0.1.1.0/pre-migration.py'
     ))['migrate']
@@ -180,6 +196,9 @@ elif phase == 'verify':
     env.cr.commit()
     print('SUPPLY_UPGRADE_PASSED: supplier backfill follows each warehouse; '
           'requester companies, users, history, purchase orders and stock moves preserved; '
-          'migration rerun twice without changes')
+          'migration rerun twice without changes; installed ' + module.installed_version)
+    if module.installed_version == '19.0.1.2.0':
+        print('RFQ_UPGRADE_PASSED: historical lines remain unpriced; '
+              'no historical RFQs created; RFQ generation remains opt-in')
 else:
     raise RuntimeError('Use ALVINA_SUPPLY_UPGRADE_PHASE=prepare or verify')

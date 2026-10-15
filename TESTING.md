@@ -1,5 +1,26 @@
 # Evidencia de validación — 15 de octubre de 2026
 
+## Resultado actual: 19.0.1.2.0
+
+- **76 pruebas Odoo: 0 fallos, 0 errores.** Las 46 de la entrega multiempresa, 22 de cotizaciones/precios/permisos y 8 de contexto web. Resultado del runner `odoo.tests.result`, sin omitir Chromium real.
+- **6 pruebas Python y 5 pruebas DOM aprobadas.** Compilación Python, XML y `git diff --check` correctos.
+- Instalación inicial y suite completa en `alvina_rfq_full_test`; repetición completa tras corregir los casos portal, con datos en `/tmp/alvina-rfq-full-data`. Registro final: `/tmp/alvina-rfq-full-tests-final.log`.
+- Actualización real **19.0.1.1.0 → 19.0.1.2.0** en `alvina_supply_upgrade_test`: dos requerimientos históricos, empresas, usuarios, cantidades y vínculo archivado conservados. Cabeceras y líneas tienen sus monedas correctas. Precios históricos no inventados, importes marcados sin captura y ninguna cotización retroactiva. Logs: `/tmp/alvina-rfq-upgrade-update.log` y `/tmp/alvina-rfq-upgrade-verify-currency.log`. Probe reproducible en `tools/check_supply_upgrade.py`.
+
+Las pruebas nuevas verifican una cotización en borrador por envío autorizado, en la empresa solicitante y con la abastecedora como proveedor, recepción de la solicitante y precio de venta registrado. Cubren precio cero, tarifa de proveedor distinta, cambios posteriores de precio, conversión monetaria, redondeo, productos privados/no comprables, duplicados, contexto `uom` manipulado, campos/defaults suplantados, identidad del documento y cancelación. Dos sucursales generan cotizaciones diferentes, mientras el consolidado suma la demanda antes de descontar una sola vez el stock del almacén abastecedor.
+
+Se probó el POST HTTP con una empresa predeterminada distinta de la sucursal y un sitio web de Industria: crea la solicitud como el usuario real y la cotización en la sucursal correcta. La normalización de compañías se limita a estas rutas y a compañías permitidas del usuario; no altera la sesión ni el contexto estándar del backend/RPC. También se probó un usuario **portal**, sin roles internos de Compras/Inventario, con varios usuarios asignados al mismo vínculo: puede enviar, sin acceder a la operación de inventario ni a documentos privados.
+
+El núcleo revisado no confirma, genera recepciones/movimientos, ventas, facturas ni correo al crear el borrador. La cotización conserva las reglas estándar de Compras: un almacenero solo de Industria no obtiene acceso general a las compras de las sucursales. El valor capturado corresponde a lo solicitado, no a una entrega acreditada. El ciclo de atención parcial/final sigue pendiente.
+
+La creación de cotizaciones exige habilitación explícita por vínculo, una recepción compradora válida, productos compartidos habilitados para compras y un proveedor disponible en la compradora. No se modifican contactos, productos, membresías ni documentos anteriores para cumplir estos requisitos. Los impuestos del borrador requieren revisión según la configuración real.
+
+Plataforma: el mismo Odoo 19 Community y runtime descritos más abajo. No se validaron Enterprise, automatizaciones privadas, tema desplegado ni producción. La evidencia de desinstalación de la sección histórica corresponde a la versión anterior; no se repitió para esta continuación. La ejecución remota de GitHub Actions de esta revisión no se verificó. El CI actual utiliza `pgserver==0.1.4` mediante socket local, sin servicio Docker.
+
+## Entrega multiempresa anterior: 19.0.1.1.0
+
+Se aprobaron 46 pruebas Odoo, además de las 6 Python y 5 DOM, y la migración real desde `bf19163` (`19.0.1.0.1`). La continuación actual conserva esa cobertura y añade las 30 pruebas descritas arriba.
+
 ## Resultado de la auditoría 19.0.1.0.1
 
 - **34 pruebas Odoo: 0 fallos, 0 errores.** Incluye 17 de modelos/configuración, 6 HTTP/navegador y 11 de seguridad. Conteo tomado de `odoo.tests.result`; el contador auxiliar de estadísticas incluye preparación de clases.
@@ -24,7 +45,7 @@ La primera entrega `cb22c5f` tenía 21 pruebas Odoo, 6 Python y 3 DOM aprobadas.
 
 Odoo 19 Community, commit `e1ed4fe077ba98ce7ac6802a43bb68242081dee9`, descargado del repositorio oficial a `/tmp/alvina-odoo19`, fuera del repositorio del addon. Python 3.12.14, entorno virtual `/tmp/alvina-venv`, Chromium del entorno, PostgreSQL local suministrado por `pgserver==0.1.4`. La auditoría utilizó la base desechable `alvina_audit_test` y datos en `/tmp/alvina-audit-data`. La prueba de desinstalación utiliza exclusivamente `alvina_requisition_test` y `/tmp/alvina-odoo-data`.
 
-Se instalaron los requisitos oficiales aplicables a Python 3.12 con dos ajustes solo para esta máquina: se omitió `python-ldap` (no se usa `auth_ldap`) y se utilizó `psycopg2-binary==2.9.9` en vez de compilar `psycopg2==2.9.9`. GCC para rjsmin y `websocket-client==1.8.0` para controlar Chromium. No se desactivaron TLS ni verificaciones de artefactos. El PostgreSQL reducido no incluye `pg_trgm`; Odoo advirtió que no podía crear esa extensión, pero completó la instalación y la suite. No se validan búsquedas trigram. El CI preparado usa PostgreSQL estándar y los requisitos oficiales completos.
+Se instalaron los requisitos oficiales aplicables a Python 3.12 con dos ajustes solo para esta máquina: se omitió `python-ldap` (no se usa `auth_ldap`) y se utilizó `psycopg2-binary==2.9.9` en vez de compilar `psycopg2==2.9.9`. GCC para rjsmin y `websocket-client==1.8.0` para controlar Chromium. No se desactivaron TLS ni verificaciones de artefactos. El PostgreSQL reducido no incluye `pg_trgm`; Odoo advirtió que no podía crear esa extensión, pero completó la instalación y la suite. No se validan búsquedas trigram. El CI actual utiliza también PostgreSQL de `pgserver` y los requisitos oficiales completos de Odoo.
 
 ## Cobertura de seguridad y stock
 
