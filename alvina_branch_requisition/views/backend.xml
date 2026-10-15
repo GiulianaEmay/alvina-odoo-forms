@@ -5,11 +5,11 @@
         <field name="model">alvina.branch.binding</field>
         <field name="arch" type="xml">
             <list>
-                <field name="name"/>
-                <field name="company_id"/>
-                <field name="supply_company_id"/>
-                <field name="warehouse_id"/>
-                <field name="active"/>
+                <field name="name" string="Sucursal"/>
+                <field name="company_id" string="Compañía solicitante"/>
+                <field name="supply_company_id" string="Compañía abastecedora"/>
+                <field name="warehouse_id" string="Almacén abastecedor"/>
+                <field name="active" string="Activo"/>
             </list>
         </field>
     </record>
@@ -20,13 +20,13 @@
             <form>
                 <sheet>
                     <group>
-                        <field name="resource_ref"/>
-                        <field name="company_id"/>
-                        <field name="warehouse_id"/>
-                        <field name="supply_company_id"/>
-                        <field name="keeper_ids" widget="many2many_tags"/>
-                        <field name="user_ids" widget="many2many_tags"/>
-                        <field name="active"/>
+                        <field name="resource_ref" string="Sucursal existente"/>
+                        <field name="company_id" string="Compañía solicitante"/>
+                        <field name="warehouse_id" string="Almacén abastecedor"/>
+                        <field name="supply_company_id" string="Compañía abastecedora"/>
+                        <field name="keeper_ids" string="Almaceneros autorizados" widget="many2many_tags"/>
+                        <field name="user_ids" string="Usuarios autorizados" widget="many2many_tags"/>
+                        <field name="active" string="Activo"/>
                     </group>
                 </sheet>
             </form>
@@ -37,12 +37,12 @@
         <field name="model">alvina.branch.request</field>
         <field name="arch" type="xml">
             <list create="0" delete="0">
-                <field name="name"/>
-                <field name="branch_id"/>
-                <field name="request_date"/>
-                <field name="required_date"/>
-                <field name="state"/>
-                <field name="user_id"/>
+                <field name="name" string="Requerimiento"/>
+                <field name="branch_id" string="Sucursal"/>
+                <field name="request_date" string="Fecha de solicitud"/>
+                <field name="required_date" string="Fecha requerida"/>
+                <field name="state" string="Estado"/>
+                <field name="user_id" string="Solicitante"/>
             </list>
         </field>
     </record>
@@ -51,16 +51,16 @@
         <field name="model">alvina.branch.request.line</field>
         <field name="arch" type="xml">
             <list create="0" edit="0" delete="0">
-                <field name="company_id"/>
-                <field name="supply_company_id"/>
-                <field name="warehouse_id"/>
-                <field name="branch_id"/>
-                <field name="request_id"/>
-                <field name="product_id"/>
-                <field name="product_uom_id"/>
-                <field name="product_qty"/>
-                <field name="qty_supplied"/>
-                <field name="qty_pending"/>
+                <field name="company_id" string="Compañía solicitante"/>
+                <field name="supply_company_id" string="Compañía abastecedora"/>
+                <field name="warehouse_id" string="Almacén abastecedor"/>
+                <field name="branch_id" string="Sucursal"/>
+                <field name="request_id" string="Requerimiento"/>
+                <field name="product_id" string="Producto"/>
+                <field name="product_uom_id" string="Unidad de medida"/>
+                <field name="product_qty" string="Cantidad solicitada"/>
+                <field name="qty_supplied" string="Cantidad atendida"/>
+                <field name="qty_pending" string="Cantidad pendiente"/>
             </list>
         </field>
     </record>
@@ -69,8 +69,8 @@
         <field name="model">alvina.branch.request</field>
         <field name="arch" type="xml">
             <search>
-                <field name="branch_id"/>
-                <field name="state"/>
+                <field name="branch_id" string="Sucursal"/>
+                <field name="state" string="Estado"/>
                 <filter name="date" string="Fecha" date="request_date"/>
                 <filter name="pending" string="Pendientes" domain="[('state', 'in', ['pending', 'review', 'partial'])]"/>
                 <filter name="by_branch" string="Sucursal" context="{'group_by': 'branch_id'}"/>
@@ -85,27 +85,27 @@
                 <header>
                     <button name="action_review" type="object" string="Revisar" invisible="state != 'pending'" groups="alvina_branch_requisition.group_keeper"/>
                     <button name="action_cancel" type="object" string="Cancelar" invisible="state not in ('pending', 'review')" groups="alvina_branch_requisition.group_keeper"/>
-                    <field name="state" widget="statusbar"/>
+                    <field name="state" string="Estado" widget="statusbar"/>
                 </header>
                 <sheet>
                     <group>
-                        <field name="name"/>
-                        <field name="branch_id"/>
-                        <field name="company_id"/>
-                        <field name="supply_company_id"/>
-                        <field name="warehouse_id"/>
-                        <field name="user_id"/>
-                        <field name="request_date"/>
-                        <field name="required_date"/>
-                        <field name="note"/>
+                        <field name="name" string="Requerimiento"/>
+                        <field name="branch_id" string="Sucursal"/>
+                        <field name="company_id" string="Compañía solicitante"/>
+                        <field name="supply_company_id" string="Compañía abastecedora"/>
+                        <field name="warehouse_id" string="Almacén abastecedor"/>
+                        <field name="user_id" string="Solicitante"/>
+                        <field name="request_date" string="Fecha de solicitud"/>
+                        <field name="required_date" string="Fecha requerida"/>
+                        <field name="note" string="Observaciones"/>
                     </group>
-                    <field name="line_ids">
+                    <field name="line_ids" string="Insumos solicitados">
                         <list create="0" delete="0">
-                            <field name="product_id"/>
-                            <field name="product_uom_id"/>
-                            <field name="product_qty"/>
-                            <field name="qty_supplied"/>
-                            <field name="qty_pending"/>
+                            <field name="product_id" string="Producto"/>
+                            <field name="product_uom_id" string="Unidad de medida"/>
+                            <field name="product_qty" string="Cantidad solicitada"/>
+                            <field name="qty_supplied" string="Cantidad atendida"/>
+                            <field name="qty_pending" string="Cantidad pendiente"/>
                         </list>
                     </field>
                 </sheet>
@@ -116,36 +116,43 @@
         <field name="name">alvina.consolidation.form</field>
         <field name="model">alvina.branch.consolidation</field>
         <field name="arch" type="xml">
-            <form>
+            <form string="Consolidado de insumos">
                 <header>
                     <button name="action_refresh" string="Recalcular" type="object" class="btn-primary"/>
                     <button name="action_branch_detail" string="Desglose por sucursal" type="object"/>
                 </header>
                 <sheet>
-                    <div class="alert alert-info" role="status">Consulta informativa, sin asignación de existencias ni creación de compras. Entradas: movimientos confirmados del almacén. Recalcule antes de usar.</div>
-                    <field name="line_ids">
+                    <div class="alert alert-info" role="status">Consulta informativa, sin asignación de existencias ni creación de compras. Entradas: movimientos confirmados del almacén. Valorización estimada al costo actual de la compañía abastecedora. Recalcule antes de usar.</div>
+                    <field name="line_ids" string="Necesidades por producto">
                         <list create="0" delete="0">
-                            <field name="product_id"/>
-                            <field name="warehouse_id"/>
-                            <field name="company_id"/>
-                            <field name="product_uom_id"/>
-                            <field name="product_qty"/>
-                            <field name="free_qty"/>
-                            <field name="incoming_qty"/>
-                            <field name="suggested_qty"/>
+                            <field name="product_id" string="Producto"/>
+                            <field name="warehouse_id" string="Almacén abastecedor"/>
+                            <field name="company_id" string="Compañía abastecedora"/>
+                            <field name="product_uom_id" string="Unidad de medida"/>
+                            <field name="product_qty" string="Cantidad pendiente"/>
+                            <field name="free_qty" string="Stock libre"/>
+                            <field name="incoming_qty" string="Entradas confirmadas"/>
+                            <field name="suggested_qty" string="Compra orientativa"/>
+                            <field name="currency_id" string="Moneda" column_invisible="True"/>
+                            <field name="unit_cost" string="Costo unitario actual"/>
+                            <field name="estimated_value" string="Valor estimado pendiente"/>
                         </list>
                         <form>
                             <group>
-                                <field name="product_id"/>
-                                <field name="warehouse_id"/>
+                                <field name="product_id" string="Producto"/>
+                                <field name="warehouse_id" string="Almacén abastecedor"/>
                             </group>
-                            <field name="source_line_ids">
-                                <list>
-                                    <field name="request_id"/>
-                                    <field name="branch_id"/>
-                                    <field name="product_qty"/>
-                                    <field name="qty_supplied"/>
-                                    <field name="qty_pending"/>
+                            <field name="detail_ids" string="Valorización pendiente por sucursal">
+                                <list create="0" edit="0" delete="0">
+                                    <field name="request_id" string="Requerimiento"/>
+                                    <field name="branch_id" string="Sucursal"/>
+                                    <field name="company_id" string="Compañía solicitante"/>
+                                    <field name="user_id" string="Solicitante"/>
+                                    <field name="product_qty" string="Cantidad pendiente"/>
+                                    <field name="product_uom_id" string="Unidad de medida"/>
+                                    <field name="currency_id" string="Moneda" column_invisible="True"/>
+                                    <field name="unit_cost" string="Costo unitario actual"/>
+                                    <field name="estimated_value" string="Valor estimado pendiente"/>
                                 </list>
                             </field>
                         </form>
@@ -170,13 +177,13 @@
         <field name="target">self</field>
     </record>
     <record id="action_consolidation" model="ir.actions.act_window">
-        <field name="name">Consolidado de compras</field>
+        <field name="name">Consolidado de insumos</field>
         <field name="res_model">alvina.branch.consolidation</field>
         <field name="view_mode">form</field>
     </record>
     <menuitem id="menu_web" name="Formulario Web" parent="purchase.menu_procurement_management" action="action_web" groups="group_requester" sequence="31"/>
     <menuitem id="menu_requests" name="Requerimientos" parent="purchase.menu_procurement_management" action="action_requests" groups="group_requester" sequence="32"/>
-    <menuitem id="menu_consolidation" name="Consolidado de compras" parent="purchase.menu_procurement_management" action="action_consolidation" groups="group_keeper" sequence="33"/>
+    <menuitem id="menu_consolidation" name="Consolidado de insumos" parent="purchase.menu_procurement_management" action="action_consolidation" groups="group_keeper" sequence="33"/>
     <record id="product_template_form" model="ir.ui.view">
         <field name="name">alvina.product.template.form</field>
         <field name="model">product.template</field>
@@ -184,7 +191,7 @@
         <field name="arch" type="xml">
             <xpath expr="//sheet" position="inside">
                 <group string="Requerimientos Alviña" groups="alvina_branch_requisition.group_admin">
-                    <field name="alvina_requisition_enabled"/>
+                    <field name="alvina_requisition_enabled" string="Disponible para requerimientos"/>
                 </group>
             </xpath>
         </field>

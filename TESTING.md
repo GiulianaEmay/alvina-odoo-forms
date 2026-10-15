@@ -1,5 +1,21 @@
 # Evidencia de validación — 15 de octubre de 2026
 
+## Sucursal fija, sitio web y valorización — 19.0.1.2.0
+
+Resultado del 15 de octubre de 2026:
+
+- **61 pruebas Odoo: 0 fallos, 0 errores, sin omisiones**, tanto al actualizar la base local existente como al instalar desde cero en `alvina_insumos_fresh_test`. Incluyen 17 de solicitudes, 11 de seguridad, 11 HTTP/navegador, 10 multiempresa, 4 de migración, 3 de interfaz en español y 5 de valorización/permisos.
+- **6 pruebas Python y 5 DOM aprobadas**, compilación Python y `git diff --check` correctos. Chromium real sigue ejecutándose.
+- Caso reproducido y corregido: sitio Industria y usuario UPAO con ambas compañías permitidas; el formulario ya encuentra UPAO incluso con Industria como predeterminada. Se comprueban envío y confirmación. La sucursal está bloqueada y se rechaza un POST que intente escoger entre dos asignaciones, usar una ajena o conservar una asignación revocada.
+- Valorización actual comprobada con costos distintos por compañía: se usa Industria, su moneda y la cantidad pendiente. Se verifican recálculo de costo, cancelación, stock central descontado una vez, costo cero y privacidad de totales/desglose frente a solicitantes y otros almaceneros. No se guardan precios retrospectivos en líneas originales ni se crean documentos de compra o entrega.
+- La actualización de la base con las dos solicitudes históricas originales conserva compañía, almacén, cantidades y estados. Con costo actual 3.25, dos líneas de 5 dan pendiente 10, valor estimado 32.50 y desglose 16.25 por solicitud. Esto es una estimación actual, no una reconstrucción del costo pasado.
+
+Logs de esta revisión: `/tmp/alvina-insumos-tests.log`, `/tmp/alvina-insumos-fresh-tests.log`, `/tmp/alvina-insumos-history-update.log` y `/tmp/alvina-insumos-history-verify.log`.
+
+La demostración local usa datos ficticios de Central, Cruz, Fosh, Larco, Makro, Modelo, Nazareth y UPAO, con compañías solicitantes separadas y el mismo almacén de Industria. Las capturas se generan con Chromium contra el addon real; no reproducen el tema ni las personalizaciones Enterprise del servidor del usuario. El servidor real no se contactó ni reinició.
+
+Para repetir, usar el comando Odoo documentado abajo en la base local desechable; `-u` actualiza y `-i` instala en una base nueva. Mantener PostgreSQL local y las dependencias documentadas. Antes de utilizar código nuevo en un servidor Odoo hay que **actualizar el módulo además de cargar el código**; un reinicio por sí solo no aplica el esquema ni las vistas nuevas. La validación Enterprise y módulos privados sigue pendiente.
+
 ## Abastecimiento multiempresa — versión 19.0.1.1.0
 
 Validado en este entorno cloud el 15 de octubre de 2026, partiendo de `bf19163`:

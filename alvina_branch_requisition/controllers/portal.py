@@ -12,8 +12,13 @@ class RequisitionPortal(http.Controller):
             raise AccessError(_('No tiene permiso para solicitar productos.'))
 
     def _branches(self):
-        return request.env['alvina.branch.binding'].search([
-            ('user_ids', 'in', request.env.uid), ('company_id', 'in', request.env.companies.ids)]).filtered(
+        # Website dispatch selects the site's company, even when the requester
+        # belongs to another company. Limit this model's context to the user's
+        # actual memberships; assignment rules still apply without sudo.
+        companies = request.env.user.company_ids.ids
+        return request.env['alvina.branch.binding'].with_context(
+            allowed_company_ids=companies).search([
+            ('user_ids', 'in', request.env.uid), ('company_id', 'in', companies)]).filtered(
                 lambda branch: branch._resource_is_available())
 
     def _products(self, branch):
@@ -28,6 +33,10 @@ class RequisitionPortal(http.Controller):
 
     def _render(self, error=None):
         branches = self._branches()
+        assignment_error = False
+        if len(branches) > 1:
+            assignment_error = _('Tienes varias sucursales asignadas. El administrador debe dejar una sola sucursal para este formulario.')
+            branches = branches.browse()
         token = secrets.token_urlsafe(32)
         tokens = request.session.get('alvina_form_tokens', [])[-9:]
         request.session['alvina_form_tokens'] = tokens + [token]
@@ -38,7 +47,8 @@ class RequisitionPortal(http.Controller):
                 'uom': p.uom_id.name, 'rounding': p.uom_id.rounding} for p in products]
         return request.render('alvina_branch_requisition.form', {
             'branches': branches, 'categories': CATEGORIES, 'catalogs': json.dumps(catalogs),
-            'submission_key': token, 'error': error, 'today': fields.Date.context_today(request.env.user)})
+            'submission_key': token, 'error': error, 'assignment_error': assignment_error,
+            'today': fields.Date.context_today(request.env.user)})
 
     @http.route('/branch/requisition/new', type='http', auth='user', website=True, methods=['GET'])
     def new(self, **kw):
@@ -52,8 +62,8 @@ class RequisitionPortal(http.Controller):
         if token not in request.session.get('alvina_form_tokens', []):
             return self._render(_('Formulario vencido o ya enviado.'))
         try:
-            branch = self._branches().filtered(lambda b: str(b.id) == post.get('branch_id'))
-            if len(branch) != 1:
+            branch = self._branches()
+            if len(branch) != 1 or str(branch.id) != post.get('branch_id'):
                 raise ValidationError(_('Sucursal no autorizada.'))
             raw = json.loads(post.get('lines', '[]'))
             if not isinstance(raw, list) or len(raw) > 10000:
@@ -69,7 +79,8 @@ class RequisitionPortal(http.Controller):
                 if qty:
                     commands.append(Command.create({'product_id': pid, 'product_qty': qty}))
             with request.env.cr.savepoint():
-                rec = request.env['alvina.branch.request'].create({
+                rec = request.env['alvina.branch.request'].with_company(branch.company_id).with_context(
+                    allowed_company_ids=[branch.company_id.id]).create({
                     'branch_id': branch.id, 'required_date': post.get('required_date'),
                     'note': post.get('note', ''), 'submission_key': token, 'line_ids': commands})
             request.session['alvina_last_request'] = rec.id
@@ -83,6 +94,8 @@ class RequisitionPortal(http.Controller):
     @http.route('/branch/requisition/success', type='http', auth='user', website=True, methods=['GET'])
     def success(self, **kw):
         self._authorize()
-        rec = request.env['alvina.branch.request'].browse(request.session.get('alvina_last_request', 0)).exists()
+        rec = request.env['alvina.branch.request'].with_context(
+            allowed_company_ids=request.env.user.company_ids.ids).browse(
+                request.session.get('alvina_last_request', 0)).exists()
         rec.check_access('read')
         return request.render('alvina_branch_requisition.success', {'record': rec})

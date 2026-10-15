@@ -1,4 +1,4 @@
-# Abastecimiento central entre compañías — 19.0.1.1.0
+# Abastecimiento central entre compañías — 19.0.1.2.0
 
 ## Datos y permisos
 
@@ -17,7 +17,7 @@ Los almaceneros solo pueden leer/revisar/cancelar solicitudes y líneas de sus s
 
 Los grupos heredados existentes de `Alviña: Almacenero` (Compras e Inventario) se conservan; no se modifican reglas ni permisos de esos módulos. Esos permisos estándar se limitan a las compañías que ya tiene cada usuario. No se añade Industria a las compañías de UPAO. Para un solicitante sin permisos de Compras se usa la URL autenticada `/branch/requisition/new`; los menús internos siguen bajo Compras → Órdenes y conservan las restricciones estándar del menú padre.
 
-Los productos usados **entre compañías deben ser compartidos** (`product.company_id = False`), estar habilitados para requerimientos y pertenecer a una de las cuatro categorías admitidas. No se convierten productos privados ni se amplía el acceso al catálogo privado de Industria. En solicitudes dentro de una misma compañía sigue siendo válido su producto privado. El portal publica únicamente los datos mínimos del catálogo habilitado y aplica el mismo criterio que el modelo.
+Los productos usados **entre compañías deben ser compartidos** (`product.company_id = False`), estar habilitados para requerimientos y pertenecer a una de las cinco categorías admitidas (Comerciales, Útiles de escritorio, Útiles de limpieza, Envases y embalajes o Abarrotes). No se convierten productos privados ni se amplía el acceso al catálogo privado de Industria. En solicitudes dentro de una misma compañía sigue siendo válido su producto privado. El portal publica únicamente los datos mínimos del catálogo habilitado y aplica el mismo criterio que el modelo.
 
 ## Consolidado
 
@@ -29,9 +29,25 @@ Ejemplo: UPAO pide 12 y otra compañía pide 8 al mismo almacén. Con stock libr
 
 El total incluye exclusivamente las sucursales visibles para ese almacenero. Una consulta de alcance parcial no representa toda la demanda de Industria. La sugerencia sigue siendo informativa: no reserva stock entre consultas/almaceneros ni crea compras, ventas, movimientos o entregas. Se preserva el bloqueo si cambia la UoM histórica. Los filtros de ubicación y fecha recibidos por contexto no alteran la consulta actual del almacén configurado.
 
+## Formulario de sucursal fija y compañía del sitio
+
+Cada usuario del formulario debe tener exactamente un vínculo activo y válido en **Usuarios autorizados**. La sucursal aparece bloqueada y el servidor exige la misma asignación al recibir el POST. Con cero vínculos se indica que falta asignación; con varios se pide al administrador dejar uno solo. El backend conserva las autorizaciones existentes para otras herramientas; este requisito se aplica al formulario y su envío.
+
+Odoo puede imponer la compañía del sitio en las rutas web. Por eso la búsqueda de sucursal del formulario usa únicamente las compañías que el usuario **ya tiene permitidas**, con sus reglas normales y su asignación de usuario. El envío se ejecuta en la compañía de su sucursal autorizada, y la confirmación conserva las reglas de lectura. No se usa `sudo()` para buscar o crear solicitudes, no se cambia la compañía del sitio ni se añaden empresas al usuario. El caso sitio Industria + usuario UPAO con ambas empresas permitidas está cubierto, también si Industria es su predeterminada.
+
+## Valorización de insumos
+
+El documento que recibe el almacenero es un **requerimiento interno**, no una orden de compra oficial. El consolidado muestra `Costo unitario actual` y `Valor estimado pendiente`: cantidad pendiente multiplicada por el `standard_price` existente del producto en la **compañía abastecedora**, en su moneda. El stock se descuenta para la compra orientativa, pero el valor pendiente corresponde a todo lo solicitado pendiente, no solo al faltante.
+
+Cada fila abre un desglose por sucursal, solicitud y solicitante, con cantidad y valor pendiente al mismo costo actual. Solo el propietario del consolidado, con rol de almacenero, puede leer sus totales y detalles. El costo se consulta con sus permisos normales y exige la abastecedora activa. Los solicitantes no reciben costos privados en sus solicitudes ni en el formulario.
+
+Recalcular obtiene costos y pendientes actuales; no cambia el costo original del producto ni escribe costos retrospectivos en solicitudes antiguas. Un costo cero se conserva como cero: el administrador debe comprobar que Industria tenga los costos configurados. Se mantiene el bloqueo ante cambios de UoM histórica para evitar mezclar cantidades y precios de unidades diferentes. Distintas monedas quedan en filas de abastecedoras distintas, sin un total combinado que las mezcle.
+
+Estas cifras son estimaciones actuales, **no valorización de entregas realizadas ni contabilidad de inventario**. Registrar lo realmente enviado requiere un proceso de entrega aún pendiente; no se crean movimientos, compras o ventas automáticamente.
+
 ## Migración histórica
 
-La versión sube de `19.0.1.0.1` a `19.0.1.1.0`. Odoo ejecuta `migrations/19.0.1.1.0/pre-migrate.py` antes de inicializar el nuevo esquema al actualizar el addon.
+La migración introducida en `19.0.1.1.0` sigue aplicándose al actualizar desde `19.0.1.0.1`, también al saltar directamente a `19.0.1.2.0`. Odoo ejecuta `migrations/19.0.1.1.0/pre-migrate.py` antes de inicializar el nuevo esquema al actualizar el addon.
 
 El script crea, si faltan, ambas columnas nuevas en cabeceras y líneas. Completa las cabeceras desde el almacén del vínculo y su compañía; completa explícitamente **todas las líneas históricas** desde su cabecera. Es idempotente, conserva snapshots existentes y, ante una actualización parcial, usa primero el almacén ya capturado en la cabecera. No depende exclusivamente de la recomputación de campos relacionados.
 

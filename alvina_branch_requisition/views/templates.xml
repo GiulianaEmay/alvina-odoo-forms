@@ -5,7 +5,8 @@
             <div class="container alvina-requisition my-5">
                 <h2 class="alvina-requisition-title mb-4">Registra tu requerimiento</h2>
                 <p t-if="error" class="alert alert-danger" role="alert" t-esc="error"/>
-                <p t-if="not branches" class="alert alert-warning">No tienes sucursales asignadas. Contacta al administrador.</p>
+                <p t-if="assignment_error" class="alert alert-warning" role="alert" t-esc="assignment_error"/>
+                <p t-if="not branches and not assignment_error" class="alert alert-warning">No tienes sucursales asignadas. Contacta al administrador.</p>
                 <form t-if="branches" id="alvina-request-form" action="/branch/requisition/submit" method="post">
                     <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                     <input type="hidden" name="submission_key" t-att-value="submission_key"/>
@@ -14,10 +15,11 @@
                     <div class="row">
                         <div class="col-12 col-md-4 form-group mb-3">
                             <label for="alvina-branch" class="form-label">Sucursal</label>
-                            <select id="alvina-branch" name="branch_id" class="form-select" t-att-disabled="len(branches) == 1">
+                            <select id="alvina-branch" name="branch_id" class="form-select" disabled="disabled">
                                 <option t-foreach="branches" t-as="branch" t-att-value="branch.id" t-esc="branch.name"/>
                             </select>
-                            <input t-if="len(branches) == 1" type="hidden" name="branch_id" t-att-value="branches.id"/>
+                            <input type="hidden" name="branch_id" t-att-value="branches.id"/>
+                            <p class="form-text">Tu sucursal se asigna automáticamente y no se puede cambiar.</p>
                         </div>
                         <div class="col-12 col-md-4 form-group mb-3">
                             <label for="alvina-category" class="form-label">Categoría de producto</label>

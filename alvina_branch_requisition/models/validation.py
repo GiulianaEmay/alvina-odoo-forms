@@ -3,7 +3,7 @@ import math
 import re
 from decimal import Decimal, InvalidOperation
 
-CATEGORIES = ('Comerciales', 'Útiles de escritorio', 'Útiles de limpieza', 'Envases y embalajes')
+CATEGORIES = ('Comerciales', 'Útiles de escritorio', 'Útiles de limpieza', 'Envases y embalajes', 'Abarrotes')
 
 def natural_key(code, name, identifier):
     return (not bool(code), tuple((0, int(p), len(p)) if p.isdigit() else (1, p.casefold())

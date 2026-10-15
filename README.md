@@ -4,7 +4,7 @@ Addon técnico `alvina_branch_requisition`, versión objetivo Odoo 19. No crea u
 
 ## Abastecimiento entre compañías
 
-La versión `19.0.1.1.0` separa compañía solicitante, compañía abastecedora y almacén abastecedor. Permite UPAO → Industria con productos compartidos, sin añadir Industria a las compañías del solicitante. Incluye asignación específica de almaceneros, snapshots históricos, migración y consolidación central por producto/almacén/abastecedora. Configuración, permisos, compatibilidad y límites: [MULTICOMPANY.md](MULTICOMPANY.md).
+La versión `19.0.1.2.0` separa compañía solicitante, compañía abastecedora y almacén abastecedor. Permite UPAO → Industria con productos compartidos, sin añadir Industria a las compañías del solicitante. Incluye asignación específica de almaceneros, snapshots históricos, migración y consolidación central por producto/almacén/abastecedora. Configuración, permisos, compatibilidad y límites: [MULTICOMPANY.md](MULTICOMPANY.md).
 
 ## Menús y aislamiento
 
@@ -21,18 +21,18 @@ El ZIP `alvinha-cybe.zip` permitió localizar `/portal/production/new` en `alvin
 
 Pendientes: confirmar la revisión desplegada, asignaciones de usuarios en la base, configuración de almacenes, categorías homónimas/hijas, abastecimientos asignados y coexistencia con Enterprise y módulos privados. La presentación propia utiliza el mismo `website.layout`, color de título y patrones Bootstrap encontrados; la equivalencia exacta del tema requiere una base de pruebas con ese tema.
 
-Las categorías se resuelven por sus cuatro nombres exactos, no por IDs: Comerciales, Útiles de escritorio, Útiles de limpieza, Envases y embalajes. No se crean categorías. Los productos deben estar activos y habilitados explícitamente mediante `alvina_requisition_enabled` en su ficha. No se consulta stock para permitir solicitudes. Orden natural por código, nombre e ID; conserva la representación y los ceros iniciales; sin código al final. No incluye subcategorías automáticamente.
+Las categorías se resuelven por sus cinco nombres exactos, no por IDs: Comerciales, Útiles de escritorio, Útiles de limpieza, Envases y embalajes, Abarrotes. No se crean categorías. Los productos deben estar activos y habilitados explícitamente mediante `alvina_requisition_enabled` en su ficha. No se consulta stock para permitir solicitudes. Orden natural por código, nombre e ID; conserva la representación y los ceros iniciales; sin código al final. No incluye subcategorías automáticamente.
 
 ## Funcionalidad y límites de la primera entrega
 
-- Formulario autenticado `/branch/requisition/new`, CSRF, sucursal automática bloqueada si es única y selección entre asignadas si son varias. Sin asignación impide el envío.
-- Cantidades conservadas entre categorías, distintas categorías por solicitud; cambiar sucursal limpia las cantidades para evitar mezclar compañías. No muestra selector de empresa ni contador.
+- Formulario autenticado `/branch/requisition/new`, CSRF, sucursal automática bloqueada. Debe haber exactamente una asignación válida por usuario del formulario: cero o varias impiden el envío y muestran mensajes distintos. También se valida en el servidor ante POST manipulado.
+- Cantidades conservadas entre categorías y distintas categorías por solicitud; el usuario no puede cambiar su sucursal en el formulario. No muestra selector de empresa ni contador.
 - Validación de productos, compañía, habilitación, cantidades finitas y múltiplos de redondeo de UoM. No guarda ceros; rechaza duplicados y negativos. Token por formulario y restricción SQL contra doble envío. Ante error, vuelve a mostrar un formulario nuevo; las cantidades no se recuperan después de un error de servidor.
 - Solicitudes enviadas inmutables, pendientes, con revisión/cancelación por almacenero. No permite borrar historial ni editar entregas por RPC. No incluye borradores editables.
 - Campos de cantidades atendidas/parcial/atendido preparados para una integración futura. NO hay procedimiento de entregas ni transición a atendido en esta fase: las entregas no deben inventarse. La cancelación solo admite solicitudes sin cantidades atendidas.
 - Consolidación bajo permisos del usuario, por producto/almacén abastecedor/compañía abastecedora, en la UoM base del producto, capturada al enviar. Si después cambia esa unidad, el consolidado se bloquea para evitar interpretar cantidades históricas en unidades diferentes. Las líneas de origen muestran el desglose por sucursal y solicitud. Recalcular obtiene datos actuales y excluye canceladas/atendidas.
 - Consulta `free_qty` (existencias menos reservas) e `incoming_qty` del almacén: incluye movimientos entrantes confirmados de Odoo, NO suma órdenes de compra por separado. Sugerencia `max(pendiente - max(stock_libre,0) - max(entradas,0),0)`. No duplica compras y recepciones mediante sumas paralelas. No implementa asignaciones exclusivas de entradas, ventanas temporales ni compensación de inventario negativo: no es un motor de aprovisionamiento completo. Es informativa y puede requerir ajuste tras conocer el proceso real.
-- No crea órdenes, transferencias, recepciones ni cambios en existencias.
+- No crea órdenes, transferencias, recepciones ni cambios en existencias. La valorización del consolidado y su desglose usa el costo actual del producto en la abastecedora y su moneda: es una estimación de los pendientes, no de entregas ni un asiento contable.
 
 ## Instalación exclusivamente en pruebas
 
@@ -48,7 +48,7 @@ Se requiere un servidor Odoo **19** con el código Community y Enterprise autori
 ```
 
 4. Arrancar el servicio de pruebas con la misma configuración. Asignar el grupo «Alviña: Configuración» al administrador responsable; acceder a vínculos desde Compras → Configuración (requiere permisos de configuración de Compras), o desde el modelo mediante herramientas técnicas. Configurar únicamente sucursales reales. Asignar los grupos Solicitante/Almacenero según corresponda.
-5. Verificar las cuatro categorías existentes y habilitar los productos deseados en su ficha. No importar duplicados.
+5. Verificar las cinco categorías existentes y habilitar los productos deseados en su ficha. No importar duplicados.
 6. Abrir Compras → Órdenes → Formulario Web. Para usuarios portal, abrir directamente la ruta web: el menú interno de Compras depende de los permisos estándar de Compras; no se amplían esos permisos a solicitantes automáticamente.
 7. Comprobar envío, acceso de un segundo usuario y consolidado. La publicación cloud y los procesos de Odoo no están configurados por estos comandos.
 

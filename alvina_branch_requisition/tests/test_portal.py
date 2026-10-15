@@ -54,14 +54,14 @@ class TestPortal(HttpCase):
         self.assertIsNone(soup.select_one('#alvina-request-form'))
         self.assertIn('No tienes sucursales asignadas', soup.get_text())
 
-    def test_multiple_branches(self):
+    def test_multiple_branches_require_configuration_instead_of_a_selector(self):
         partner = self.env['res.partner'].create({'name': 'Segunda sucursal portal'})
         self.env['alvina.branch.binding'].create({
             'resource_ref': 'res.partner,%s' % partner.id, 'company_id': self.env.company.id,
             'warehouse_id': self.warehouse.id, 'user_ids': [Command.set(self.user.ids)]})
         soup = self.form()
-        self.assertFalse(soup.select_one('#alvina-branch').has_attr('disabled'))
-        self.assertEqual(len(soup.select('#alvina-branch option')), 2)
+        self.assertIsNone(soup.select_one('#alvina-request-form'))
+        self.assertIn('Tienes varias sucursales asignadas', soup.get_text())
 
     def test_csrf_required(self):
         self.authenticate('alvina-portal-test', 'local-test-only')
@@ -97,7 +97,7 @@ class TestPortal(HttpCase):
                 };
                 assert(document.querySelector('#alvina-branch').disabled, 'Single branch must be locked');
                 assert(!form.querySelector('[name="company_id"]'), 'Company must not be shown');
-                assert(category.options.length === 4, 'Four approved categories required');
+                assert(category.options.length === 5, 'Five approved supply categories required');
                 assert(getComputedStyle(document.querySelector('.alvina-requisition h2')).color === 'rgb(104, 20, 18)', 'Corporate heading color');
                 const rows = document.querySelectorAll('#alvina-products tr');
                 assert(rows[0].textContent.includes('Orden anterior'), 'Natural order 2 before 10');
@@ -174,3 +174,66 @@ class TestCrossCompanyPortal(HttpCase):
         self.assertEqual(rec.line_ids.company_id, self.request_company)
         self.assertEqual(rec.line_ids.qty_pending, 4)
         self.assertNotIn(self.supply_company, self.user.company_ids)
+
+    def _form_values(self):
+        import json
+        self.authenticate(self.user.login, 'local-test-only')
+        response = self.url_open('/branch/requisition/new')
+        self.assertEqual(response.status_code, 200)
+        soup = BeautifulSoup(response.content, 'html.parser')
+        self.assertIsNotNone(soup.select_one('#alvina-request-form'))
+        self.assertTrue(soup.select_one('#alvina-branch').has_attr('disabled'))
+        values = {i['name']: i.get('value', '') for i in soup.select('input[name]')}
+        values.update(required_date=str(fields.Date.today()),
+                      lines=json.dumps([{'id': self.product.id, 'qty': '4'}]))
+        return values
+
+    def test_supplier_website_does_not_hide_upao_for_a_multicompany_user(self):
+        self.user.company_ids = [Command.link(self.supply_company.id)]
+        website = self.env['website'].search([], limit=1)
+        website.company_id = self.supply_company
+        for main_company in (self.request_company, self.supply_company):
+            with self.subTest(main_company=main_company.name):
+                self.user.company_id = main_company
+                values = self._form_values()
+                response = self.url_open('/branch/requisition/submit', data=values)
+                self.assertEqual(response.status_code, 200)
+                self.assertIn('Requerimiento recibido', response.text)
+        records = self.env['alvina.branch.request'].search([('user_id', '=', self.user.id)])
+        self.assertEqual(len(records), 2)
+        self.assertEqual(records.company_id, self.request_company)
+        self.assertEqual(records.supply_company_id, self.supply_company)
+
+    def test_multiple_assignments_cannot_be_selected_by_a_forged_post(self):
+        values = self._form_values()
+        partner = self.env['res.partner'].create({'name': 'Second assigned UPAO branch'})
+        second = self.env['alvina.branch.binding'].create({
+            'resource_ref': f'res.partner,{partner.id}', 'company_id': self.request_company.id,
+            'warehouse_id': self.branch.warehouse_id.id, 'user_ids': [Command.set(self.user.ids)]})
+        for branch in (self.branch, second):
+            with self.subTest(branch=branch.id):
+                response = self.url_open('/branch/requisition/submit', data={**values, 'branch_id': str(branch.id)})
+                self.assertIn('Tienes varias sucursales asignadas', response.text)
+                self.assertNotIn('Requerimiento recibido', response.text)
+        self.assertFalse(self.env['alvina.branch.request'].search([('user_id', '=', self.user.id)]))
+
+    def test_unassigned_branch_and_revoked_assignment_cannot_be_posted(self):
+        values = self._form_values()
+        partner = self.env['res.partner'].create({'name': 'Unassigned UPAO form branch'})
+        other = self.env['alvina.branch.binding'].create({
+            'resource_ref': f'res.partner,{partner.id}', 'company_id': self.request_company.id,
+            'warehouse_id': self.branch.warehouse_id.id})
+        response = self.url_open('/branch/requisition/submit', data={**values, 'branch_id': str(other.id)})
+        self.assertIn('Sucursal no autorizada', response.text)
+        self.branch.user_ids = [Command.clear()]
+        response = self.url_open('/branch/requisition/submit', data=values)
+        self.assertIn('Sucursal no autorizada', response.text)
+        self.assertFalse(self.env['alvina.branch.request'].search([('user_id', '=', self.user.id)]))
+
+    def test_binding_in_a_removed_company_is_not_visible(self):
+        self.user.write({'company_ids': [Command.set(self.supply_company.ids)],
+                         'company_id': self.supply_company.id})
+        self.authenticate(self.user.login, 'local-test-only')
+        response = self.url_open('/branch/requisition/new')
+        self.assertIn('No tienes sucursales asignadas', response.text)
+        self.assertNotIn(self.product.name, response.text)

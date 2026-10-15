@@ -27,7 +27,7 @@ principalmente el prefijo **`alvinha_`**; `alvina_stock_request` y el nuevo
 | Entrada al formulario | `alvinha_mrp/controllers/main.py:35`, ruta `/portal/production/new` | El formulario pertenece a `alvinha_mrp`, no al addon nuevo. |
 | Plantilla | `alvinha_mrp/views/portal_production_templates.xml:4`, identificador `alvinha_mrp.production_form` | Usa `website.layout`, contenedor Bootstrap, título `Registra tu pedido`, color `#681412`, selectores en una fila y tabla de cantidades. La revisión nueva usa esos patrones con plantilla y recursos propios, sin modificar la original; se probó en Chromium con el tema estándar y queda pendiente contrastar el tema privado. |
 | Recursos frontend | `alvinha_mrp/static/src/js/public_widget.js:11`; declaración en `alvinha_mrp/__manifest__.py:31` | El widget se limita a `form#portal_production_form`. El nuevo formulario debe conservar su identificador y recursos propios para evitar interceptar esos eventos. |
-| Carga de productos | `alvinha_mrp/controllers/main.py:66`; modelo `mrp.category.product` en `alvinha_mrp/models/mrp_category_product.py:8` | Los agrupadores de producción son un modelo propio. No equivalen automáticamente a las cuatro categorías de productos de requerimientos. |
+| Carga de productos | `alvinha_mrp/controllers/main.py:66`; modelo `mrp.category.product` en `alvinha_mrp/models/mrp_category_product.py:8` | Los agrupadores de producción son un modelo propio. No equivalen automáticamente a las categorías de productos de requerimientos. |
 | Envío | `alvinha_mrp/controllers/main.py:102`, ruta `/portal/production/create`; creación de venta en `:250` y `:255` | Es un flujo de producción que también crea ventas. El nuevo addon debe usar su controlador y modelos de requerimientos, sin llamar a ese envío. |
 | Acción del menú existente | `alvinha_mrp/views/menu.xml:8`, `ir.actions.act_url`, destino `new` | Confirma el mecanismo de apertura en una pestaña nueva. En esta copia el menú está bajo `mrp.menu_mrp_manufacturing` (`:17`), no bajo Ventas. La ubicación observada en la instalación puede deberse a otra revisión o configuración de base de datos. |
 
@@ -77,8 +77,9 @@ campo de nombre coincidente existe.
 
 Mientras no se identifique una relación de permisos ya mantenida en la base, la
 asignación explícita en el vínculo es la fuente de autorización del nuevo addon.
-Una sola asignación produce una sucursal automática bloqueada; varias permiten
-selección; ninguna impide enviar. Los almaceneros también necesitan asignaciones
+Una sola asignación produce una sucursal automática bloqueada. Desde 19.0.1.2.0,
+varias asignaciones bloquean el formulario y requieren corrección administrativa;
+sin asignación tampoco se permite enviar. Los almaceneros también necesitan asignaciones
 expresas. No convertir pertenencia a una compañía en acceso a todas sus sucursales.
 
 ## Relación con `alvina_stock_request`

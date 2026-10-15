@@ -1,6 +1,6 @@
 {
     'name': 'Alviña - Requerimientos de sucursales',
-    'version': '19.0.1.1.0',
+    'version': '19.0.1.2.0',
     'author': 'Grupo Alviña',
     'license': 'LGPL-3',
     'depends': ['purchase', 'stock', 'purchase_stock', 'portal', 'website'],
