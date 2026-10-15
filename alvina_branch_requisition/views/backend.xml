@@ -1,14 +1,15 @@
-<?xml version="1.0" ?>
+<?xml version='1.0' encoding='utf-8'?>
 <odoo>
     <record id="binding_list" model="ir.ui.view">
         <field name="name">alvina.binding.list</field>
         <field name="model">alvina.branch.binding</field>
         <field name="arch" type="xml">
             <list>
-                <field name="name"/>
-                <field name="company_id"/>
-                <field name="warehouse_id"/>
-                <field name="active"/>
+                <field name="name" />
+                <field name="company_id" />
+                <field name="supply_company_id" />
+                <field name="warehouse_id" />
+                <field name="active" />
             </list>
         </field>
     </record>
@@ -19,11 +20,12 @@
             <form>
                 <sheet>
                     <group>
-                        <field name="resource_ref"/>
-                        <field name="company_id"/>
-                        <field name="warehouse_id" domain="[('company_id', '=', company_id)]"/>
-                        <field name="user_ids" widget="many2many_tags"/>
-                        <field name="active"/>
+                        <field name="resource_ref" />
+                        <field name="company_id" />
+                        <field name="supply_company_id" />
+                        <field name="warehouse_id" domain="[('company_id', '=', supply_company_id)]" />
+                        <field name="user_ids" widget="many2many_tags" />
+                        <field name="active" />
                     </group>
                 </sheet>
             </form>
@@ -34,12 +36,12 @@
         <field name="model">alvina.branch.request</field>
         <field name="arch" type="xml">
             <list create="0" delete="0">
-                <field name="name"/>
-                <field name="branch_id"/>
-                <field name="request_date"/>
-                <field name="required_date"/>
-                <field name="state"/>
-                <field name="user_id"/>
+                <field name="name" />
+                <field name="branch_id" />
+                <field name="request_date" />
+                <field name="required_date" />
+                <field name="state" />
+                <field name="user_id" />
             </list>
         </field>
     </record>
@@ -48,14 +50,16 @@
         <field name="model">alvina.branch.request.line</field>
         <field name="arch" type="xml">
             <list create="0" edit="0" delete="0">
-                <field name="company_id"/>
-                <field name="branch_id"/>
-                <field name="request_id"/>
-                <field name="product_id"/>
-                <field name="product_uom_id"/>
-                <field name="product_qty"/>
-                <field name="qty_supplied"/>
-                <field name="qty_pending"/>
+                <field name="company_id" />
+                <field name="supply_company_id" />
+                <field name="warehouse_id" />
+                <field name="branch_id" />
+                <field name="request_id" />
+                <field name="product_id" />
+                <field name="product_uom_id" />
+                <field name="product_qty" />
+                <field name="qty_supplied" />
+                <field name="qty_pending" />
             </list>
         </field>
     </record>
@@ -64,11 +68,11 @@
         <field name="model">alvina.branch.request</field>
         <field name="arch" type="xml">
             <search>
-                <field name="branch_id"/>
-                <field name="state"/>
-                <filter name="date" string="Fecha" date="request_date"/>
-                <filter name="pending" string="Pendientes" domain="[('state', 'in', ['pending', 'review', 'partial'])]"/>
-                <filter name="by_branch" string="Sucursal" context="{'group_by': 'branch_id'}"/>
+                <field name="branch_id" />
+                <field name="state" />
+                <filter name="date" string="Fecha" date="request_date" />
+                <filter name="pending" string="Pendientes" domain="[('state', 'in', ['pending', 'review', 'partial'])]" />
+                <filter name="by_branch" string="Sucursal" context="{'group_by': 'branch_id'}" />
             </search>
         </field>
     </record>
@@ -78,26 +82,28 @@
         <field name="arch" type="xml">
             <form create="0" edit="0" delete="0">
                 <header>
-                    <button name="action_review" type="object" string="Revisar" invisible="state != 'pending'" groups="alvina_branch_requisition.group_keeper"/>
-                    <button name="action_cancel" type="object" string="Cancelar" invisible="state not in ('pending', 'review')" groups="alvina_branch_requisition.group_keeper"/>
-                    <field name="state" widget="statusbar"/>
+                    <button name="action_review" type="object" string="Revisar" invisible="state != 'pending'" groups="alvina_branch_requisition.group_keeper" />
+                    <button name="action_cancel" type="object" string="Cancelar" invisible="state not in ('pending', 'review')" groups="alvina_branch_requisition.group_keeper" />
+                    <field name="state" widget="statusbar" />
                 </header>
                 <sheet>
                     <group>
-                        <field name="name"/>
-                        <field name="branch_id"/>
-                        <field name="user_id"/>
-                        <field name="request_date"/>
-                        <field name="required_date"/>
-                        <field name="note"/>
+                        <field name="name" />
+                        <field name="branch_id" />
+                        <field name="user_id" />
+                        <field name="request_date" />
+                        <field name="required_date" />
+                        <field name="note" />
+                        <field name="company_id" options="{'no_open': True}" />
+                        <field name="supply_company_id" options="{'no_open': True}" />
                     </group>
                     <field name="line_ids">
                         <list create="0" delete="0">
-                            <field name="product_id"/>
-                            <field name="product_uom_id"/>
-                            <field name="product_qty"/>
-                            <field name="qty_supplied"/>
-                            <field name="qty_pending"/>
+                            <field name="product_id" />
+                            <field name="product_uom_id" />
+                            <field name="product_qty" />
+                            <field name="qty_supplied" />
+                            <field name="qty_pending" />
                         </list>
                     </field>
                 </sheet>
@@ -110,34 +116,35 @@
         <field name="arch" type="xml">
             <form>
                 <header>
-                    <button name="action_refresh" string="Recalcular" type="object" class="btn-primary"/>
-                    <button name="action_branch_detail" string="Desglose por sucursal" type="object"/>
+                    <button name="action_refresh" string="Recalcular" type="object" class="btn-primary" />
+                    <button name="action_branch_detail" string="Desglose por sucursal" type="object" />
                 </header>
                 <sheet>
                     <div class="alert alert-info" role="status">Consulta informativa, sin asignación de existencias ni creación de compras. Entradas: movimientos confirmados del almacén. Recalcule antes de usar.</div>
                     <field name="line_ids">
                         <list create="0" delete="0">
-                            <field name="product_id"/>
-                            <field name="warehouse_id"/>
-                            <field name="company_id"/>
-                            <field name="product_uom_id"/>
-                            <field name="product_qty"/>
-                            <field name="free_qty"/>
-                            <field name="incoming_qty"/>
-                            <field name="suggested_qty"/>
+                            <field name="product_id" />
+                            <field name="warehouse_id" />
+                            <field name="company_id" />
+                            <field name="product_uom_id" />
+                            <field name="product_qty" />
+                            <field name="free_qty" />
+                            <field name="incoming_qty" />
+                            <field name="suggested_qty" />
                         </list>
                         <form>
                             <group>
-                                <field name="product_id"/>
-                                <field name="warehouse_id"/>
+                                <field name="product_id" />
+                                <field name="warehouse_id" />
                             </group>
                             <field name="source_line_ids">
                                 <list>
-                                    <field name="request_id"/>
-                                    <field name="branch_id"/>
-                                    <field name="product_qty"/>
-                                    <field name="qty_supplied"/>
-                                    <field name="qty_pending"/>
+                                    <field name="request_id" />
+                                    <field name="company_id" options="{'no_open': True}" />
+                                    <field name="branch_id" />
+                                    <field name="product_qty" />
+                                    <field name="qty_supplied" />
+                                    <field name="qty_pending" />
                                 </list>
                             </field>
                         </form>
@@ -166,20 +173,20 @@
         <field name="res_model">alvina.branch.consolidation</field>
         <field name="view_mode">form</field>
     </record>
-    <menuitem id="menu_web" name="Formulario Web" parent="purchase.menu_procurement_management" action="action_web" groups="group_requester" sequence="31"/>
-    <menuitem id="menu_requests" name="Requerimientos" parent="purchase.menu_procurement_management" action="action_requests" groups="group_requester" sequence="32"/>
-    <menuitem id="menu_consolidation" name="Consolidado de compras" parent="purchase.menu_procurement_management" action="action_consolidation" groups="group_keeper" sequence="33"/>
+    <menuitem id="menu_web" name="Formulario Web" parent="purchase.menu_procurement_management" action="action_web" groups="group_requester" sequence="31" />
+    <menuitem id="menu_requests" name="Requerimientos" parent="purchase.menu_procurement_management" action="action_requests" groups="group_requester" sequence="32" />
+    <menuitem id="menu_consolidation" name="Consolidado de compras" parent="purchase.menu_procurement_management" action="action_consolidation" groups="group_keeper" sequence="33" />
     <record id="product_template_form" model="ir.ui.view">
         <field name="name">alvina.product.template.form</field>
         <field name="model">product.template</field>
-        <field name="inherit_id" ref="product.product_template_only_form_view"/>
+        <field name="inherit_id" ref="product.product_template_only_form_view" />
         <field name="arch" type="xml">
             <xpath expr="//sheet" position="inside">
                 <group string="Requerimientos Alviña" groups="alvina_branch_requisition.group_admin">
-                    <field name="alvina_requisition_enabled"/>
+                    <field name="alvina_requisition_enabled" />
                 </group>
             </xpath>
         </field>
     </record>
-    <menuitem id="menu_bindings" name="Vínculos de sucursales Alviña" parent="purchase.menu_purchase_config" action="action_bindings" groups="group_admin"/>
+    <menuitem id="menu_bindings" name="Vínculos de sucursales Alviña" parent="purchase.menu_purchase_config" action="action_bindings" groups="group_admin" />
 </odoo>

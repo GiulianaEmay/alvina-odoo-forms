@@ -1,6 +1,6 @@
 # Alviña — Requerimientos de sucursales
 
-Addon técnico `alvina_branch_requisition`, versión objetivo Odoo 19. No crea una aplicación: `application=False`, sin menú raíz ni icono. Depende de `purchase`, `stock`, `purchase_stock`, `portal`, `website` (y sus dependencias transitivas). No requiere bibliotecas frontend externas.
+Addon técnico `alvina_branch_requisition`, versión actual `19.0.1.1.0` para Odoo 19. No crea una aplicación: `application=False`, sin menú raíz ni icono. Depende de `purchase`, `stock`, `purchase_stock`, `portal`, `website` (y sus dependencias transitivas). No requiere bibliotecas frontend externas.
 
 ## Menús y aislamiento
 
@@ -11,7 +11,7 @@ No se modifican los archivos de purchase ni Ventas, ni las acciones de cotizaci�
 
 ## Integración adaptable, pendiente de validar
 
-`alvina.branch.binding` vincula un contacto de sucursal existente (`res.partner`), su compañía, almacén abastecedor y usuarios autorizados. No crea contactos ni sucursales. El selector se limita a contactos; un adaptador explícito puede extender los modelos permitidos, nunca habilitar indiscriminadamente toda la base. Se impiden vínculos repetidos y cambios de identidad/almacén cuando existe historial; cambiar un almacén en ese caso requiere una migración controlada, no archivar y duplicar el contacto. El administrador asigna también los almaceneros a las sucursales bajo su responsabilidad. Las reglas globales restringen cabeceras y líneas por compañía y asignación; ser administrador no concede acceso a todas las solicitudes.
+`alvina.branch.binding` vincula un contacto de sucursal existente (`res.partner`), la empresa solicitante, la empresa abastecedora, su almacén y los usuarios autorizados. No crea contactos ni sucursales. El selector se limita a contactos; un adaptador explícito puede extender los modelos permitidos, nunca habilitar indiscriminadamente toda la base. Se impiden vínculos repetidos y cambios de identidad/almacén cuando existe historial; cambiar un almacén en ese caso requiere una migración controlada, no archivar y duplicar el contacto. El administrador asigna también los almaceneros a las sucursales bajo su responsabilidad. Las reglas globales restringen cabeceras y líneas por compañía y asignación; ser administrador no concede acceso a todas las solicitudes.
 
 El ZIP `alvinha-cybe.zip` permitió localizar `/portal/production/new` en `alvinha_mrp` y la clasificación `res.partner.type_client = 'branch'` en `alvinha_base`. No contiene una relación personalizada de usuarios con varias sucursales. Véase [INTEGRATION.md](INTEGRATION.md) para referencias y dónde colocar la carpeta del addon. En la instalación real se deben seleccionar únicamente contactos de sucursales reales; el núcleo no instala ni simula los campos privados.
 
@@ -19,14 +19,20 @@ Pendientes: confirmar la revisión desplegada, asignaciones de usuarios en la ba
 
 Las categorías se resuelven por sus cuatro nombres exactos, no por IDs: Comerciales, Útiles de escritorio, Útiles de limpieza, Envases y embalajes. No se crean categorías. Los productos deben estar activos y habilitados explícitamente mediante `alvina_requisition_enabled` en su ficha. No se consulta stock para permitir solicitudes. Orden natural por código, nombre e ID; conserva la representación y los ceros iniciales; sin código al final. No incluye subcategorías automáticamente.
 
-## Funcionalidad y límites de la primera entrega
+## Abastecimiento central y compañías distintas
+
+Industria puede abastecer a UPAO y otras sucursales sin añadir Industria a las compañías permitidas de los usuarios solicitantes. El vínculo separa **Empresa solicitante**, **Empresa abastecedora** y **Almacén abastecedor**. La solicitud pertenece a la primera; el stock y el consolidado se consultan en la segunda. Los almaceneros requieren asignación explícita a las sucursales; no se modifican los permisos estándar de otras compañías.
+
+Consultar [SUPPLY_COMPANIES.md](SUPPLY_COMPANIES.md) para configurar el caso real confirmado por el usuario y actualizar desde `19.0.1.0.1`, incluidas las migraciones de datos. La nueva versión debe actualizarse primero en pruebas; el repositorio no modifica el servidor por sí solo.
+
+## Funcionalidad y límites actuales
 
 - Formulario autenticado `/branch/requisition/new`, CSRF, sucursal automática bloqueada si es única y selección entre asignadas si son varias. Sin asignación impide el envío.
 - Cantidades conservadas entre categorías, distintas categorías por solicitud; cambiar sucursal limpia las cantidades para evitar mezclar compañías. No muestra selector de empresa ni contador.
 - Validación de productos, compañía, habilitación, cantidades finitas y múltiplos de redondeo de UoM. No guarda ceros; rechaza duplicados y negativos. Token por formulario y restricción SQL contra doble envío. Ante error, vuelve a mostrar un formulario nuevo; las cantidades no se recuperan después de un error de servidor.
 - Solicitudes enviadas inmutables, pendientes, con revisión/cancelación por almacenero. No permite borrar historial ni editar entregas por RPC. No incluye borradores editables.
 - Campos de cantidades atendidas/parcial/atendido preparados para una integración futura. NO hay procedimiento de entregas ni transición a atendido en esta fase: las entregas no deben inventarse. La cancelación solo admite solicitudes sin cantidades atendidas.
-- Consolidación bajo permisos del usuario, por producto/almacén/compañía, en la UoM base del producto, capturada al enviar. Si después cambia esa unidad, el consolidado se bloquea para evitar interpretar cantidades históricas en unidades diferentes. Las líneas de origen muestran el desglose por sucursal y solicitud. Recalcular obtiene datos actuales y excluye canceladas/atendidas.
+- Consolidación bajo permisos del usuario, por producto/almacén/empresa abastecedora, sumando primero las necesidades de las distintas compañías solicitantes, en la UoM base del producto, capturada al enviar. Si después cambia esa unidad, el consolidado se bloquea para evitar interpretar cantidades históricas en unidades diferentes. Las líneas de origen muestran el desglose por sucursal y solicitud. Recalcular obtiene datos actuales y excluye canceladas/atendidas.
 - Consulta `free_qty` (existencias menos reservas) e `incoming_qty` del almacén: incluye movimientos entrantes confirmados de Odoo, NO suma órdenes de compra por separado. Sugerencia `max(pendiente - max(stock_libre,0) - max(entradas,0),0)`. No duplica compras y recepciones mediante sumas paralelas. No implementa asignaciones exclusivas de entradas, ventanas temporales ni compensación de inventario negativo: no es un motor de aprovisionamiento completo. Es informativa y puede requerir ajuste tras conocer el proceso real.
 - No crea órdenes, transferencias, recepciones ni cambios en existencias.
 

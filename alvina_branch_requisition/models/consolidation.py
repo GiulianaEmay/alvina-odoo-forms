@@ -16,7 +16,7 @@ class Consolidation(models.TransientModel):
                 'res_model': 'alvina.branch.request.line', 'view_mode': 'list',
                 'domain': [('request_id.state', 'in', ['pending', 'review', 'partial']),
                            ('qty_pending', '>', 0)],
-                'context': {'group_by': ['company_id', 'branch_id', 'product_id', 'product_uom_id'],
+                'context': {'group_by': ['supply_company_id', 'warehouse_id', 'branch_id', 'product_id', 'product_uom_id'],
                             'create': False, 'edit': False, 'delete': False}}
 
     def action_refresh(self):
@@ -25,16 +25,22 @@ class Consolidation(models.TransientModel):
             raise AccessError(_('Acción reservada al almacenero.'))
         self.line_ids.unlink()
         lines = self.env['alvina.branch.request.line'].search([
-            ('request_id.state', 'in', ['pending', 'review', 'partial']), ('qty_pending', '>', 0)])
+            ('request_id.state', 'in', ['pending', 'review', 'partial']), ('qty_pending', '>', 0),
+            ('supply_company_id', 'in', self.env.companies.ids)])
         groups = {}
         for line in lines:
             if line.product_uom_id != line.product_id.uom_id:
                 raise ValidationError(_('La unidad de un producto cambió después del requerimiento. Revise sus solicitudes antes de consolidar.'))
-            key = (line.product_id, line.branch_id.warehouse_id, line.company_id)
+            key = (line.product_id, line.warehouse_id, line.supply_company_id)
             groups.setdefault(key, self.env['alvina.branch.request.line'])
             groups[key] |= line
         for (product, warehouse, company), detail in groups.items():
-            stock = product.with_company(company).with_context(warehouse_id=warehouse.id)
+            stock_keys = {'location', 'warehouse', 'warehouse_id', 'search_warehouse',
+                          'search_location', 'from_date', 'to_date', 'lot_id', 'owner_id',
+                          'package_id', 'owners', 'strict'}
+            stock_context = {key: value for key, value in self.env.context.items() if key not in stock_keys}
+            stock = product.with_context(stock_context).with_company(company).with_context(
+                warehouse_id=warehouse.id, allowed_company_ids=company.ids)
             demand = sum(detail.mapped('qty_pending'))
             free, incoming = stock.free_qty, stock.incoming_qty
             self.env['alvina.branch.consolidation.line'].create({
@@ -52,7 +58,7 @@ class ConsolidationLine(models.TransientModel):
     product_id = fields.Many2one('product.product', readonly=True)
     product_uom_id = fields.Many2one(related='product_id.uom_id')
     warehouse_id = fields.Many2one('stock.warehouse', readonly=True)
-    company_id = fields.Many2one('res.company', readonly=True)
+    company_id = fields.Many2one('res.company', string='Empresa abastecedora', readonly=True)
     product_qty = fields.Float(string='Pendiente', readonly=True, digits='Product Unit')
     free_qty = fields.Float(string='Stock libre', readonly=True, digits='Product Unit')
     incoming_qty = fields.Float(string='Entradas confirmadas', readonly=True, digits='Product Unit')

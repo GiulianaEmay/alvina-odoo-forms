@@ -14,7 +14,9 @@ class BranchRequest(models.Model):
     name = fields.Char(default='Nuevo', readonly=True, copy=False)
     user_id = fields.Many2one('res.users', required=True, default=lambda self: self.env.user, readonly=True)
     branch_id = fields.Many2one('alvina.branch.binding', required=True, check_company=True, ondelete='restrict')
-    company_id = fields.Many2one(related='branch_id.company_id', store=True)
+    company_id = fields.Many2one(related='branch_id.company_id', store=True, string='Empresa solicitante')
+    supply_company_id = fields.Many2one(related='branch_id.supply_company_id', store=True, string='Empresa abastecedora')
+    warehouse_id = fields.Many2one(related='branch_id.warehouse_id', store=True, string='Almacén abastecedor')
     request_date = fields.Datetime(default=fields.Datetime.now, required=True, readonly=True)
     required_date = fields.Date(required=True)
     note = fields.Text()
@@ -27,16 +29,21 @@ class BranchRequest(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
+            if set(vals) - {'branch_id', 'required_date', 'note', 'submission_key', 'line_ids',
+                            'state', 'user_id', 'name', 'request_date'}:
+                raise AccessError(_('Campos de solicitud no autorizados.'))
             branch = self.env['alvina.branch.binding'].browse(vals.get('branch_id')).exists()
             if not branch or not branch.active or self.env.user not in branch.user_ids or branch.company_id not in self.env.companies:
                 raise AccessError(_('Sucursal no autorizada.'))
             if not branch._resource_is_available():
                 raise ValidationError(_('La sucursal vinculada ya no está disponible en esta compañía.'))
-            if vals.get('state', 'pending') != 'pending' or vals.get('user_id', self.env.uid) != self.env.uid:
+            if vals.get('state', self.env.context.get('default_state', 'pending')) != 'pending' or vals.get('user_id', self.env.uid) != self.env.uid:
                 raise AccessError(_('Datos de solicitud no autorizados.'))
             if not vals.get('line_ids'):
                 raise ValidationError(_('Ingrese al menos un producto.'))
-            vals.update(user_id=self.env.uid, request_date=fields.Datetime.now(),
+            vals.update(user_id=self.env.uid, state='pending', company_id=branch.company_id.id,
+                        supply_company_id=branch.supply_company_id.id, warehouse_id=branch.warehouse_id.id,
+                        request_date=fields.Datetime.now(),
                         name=self.env['ir.sequence'].sudo().next_by_code('alvina.branch.request'))
         token = _CREATING.set(True)
         try:
@@ -83,8 +90,10 @@ class RequestLine(models.Model):
 
     request_id = fields.Many2one('alvina.branch.request', required=True, ondelete='cascade', check_company=True)
     branch_id = fields.Many2one(related='request_id.branch_id', store=True)
-    company_id = fields.Many2one(related='request_id.company_id', store=True)
-    product_id = fields.Many2one('product.product', required=True, check_company=True)
+    company_id = fields.Many2one(related='request_id.company_id', store=True, string='Empresa solicitante')
+    supply_company_id = fields.Many2one(related='request_id.supply_company_id', store=True, string='Empresa abastecedora')
+    warehouse_id = fields.Many2one(related='request_id.warehouse_id', store=True, string='Almacén abastecedor')
+    product_id = fields.Many2one('product.product', required=True)
     product_uom_id = fields.Many2one('uom.uom', required=True, readonly=True, ondelete='restrict')
     product_qty = fields.Float(required=True, digits='Product Unit')
     qty_supplied = fields.Float(default=0, readonly=True, digits='Product Unit')
@@ -119,12 +128,14 @@ class RequestLine(models.Model):
                 raise AccessError(_('Requerimiento no autorizado.'))
         return super().create(vals_list)
 
-    @api.constrains('product_id', 'product_qty', 'request_id')
+    @api.constrains('product_id', 'product_qty', 'request_id', 'supply_company_id')
     def _validate_product(self):
         for line in self:
             p = line.product_id.sudo()
             if not p.active or not p.product_tmpl_id.active or not p.alvina_requisition_enabled or p.categ_id.name not in CATEGORIES:
                 raise ValidationError(_('Producto no habilitado o categoría no permitida.'))
+            if p.company_id and p.company_id != line.supply_company_id:
+                raise ValidationError(_('El producto debe estar compartido o pertenecer a la empresa abastecedora.'))
             try:
                 quantity(line.product_qty, p.uom_id.rounding)
             except ValueError as exc:

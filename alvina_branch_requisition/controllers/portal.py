@@ -31,7 +31,7 @@ class RequisitionPortal(http.Controller):
         request.session['alvina_form_tokens'] = tokens + [token]
         catalogs = {}
         for branch in branches:
-            products = sorted(self._products(branch.company_id), key=lambda p: natural_key(p.default_code, p.name, p.id))
+            products = sorted(self._products(branch.supply_company_id), key=lambda p: natural_key(p.default_code, p.name, p.id))
             catalogs[str(branch.id)] = [{'id': p.id, 'name': p.display_name, 'category': p.categ_id.name,
                 'uom': p.uom_id.name, 'rounding': p.uom_id.rounding} for p in products]
         return request.render('alvina_branch_requisition.form', {
@@ -56,7 +56,7 @@ class RequisitionPortal(http.Controller):
             raw = json.loads(post.get('lines', '[]'))
             if not isinstance(raw, list) or len(raw) > 10000:
                 raise ValueError('Detalle inválido')
-            products = {p.id: p for p in self._products(branch.company_id)}
+            products = {p.id: p for p in self._products(branch.supply_company_id)}
             seen, commands = set(), []
             for item in raw:
                 pid = item['id']

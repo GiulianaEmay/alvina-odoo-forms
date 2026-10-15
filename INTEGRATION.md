@@ -188,3 +188,9 @@ El formulario, permisos y consolidado están probados en Community; no se certif
 El almacén de un vínculo con historial no se puede reasignar. La unicidad del contacto también impide archivar y crear un segundo vínculo del mismo contacto: un cambio de almacén con historial requiere diseñar una migración o versionado, no duplicar contactos ni borrar solicitudes.
 
 La autorización actual permite subir las correcciones únicamente a `GiulianaEmay/alvina-odoo-forms`. El usuario trasladará después la carpeta del addon al repositorio compartido; no se realizó escritura en `SoyCalidad/alvinha` ni se confirmó el destino de despliegue de `cybe`.
+
+## Abastecimiento central confirmado después de la inspección
+
+El usuario confirmó que Industria Panificadora Alviña abastece/vende a las demás sucursales, que pueden figurar en Odoo como compañías diferentes. Desde `19.0.1.1.0` el núcleo distingue empresa solicitante (`company_id`) de empresa abastecedora (`supply_company_id`) y almacén. El usuario de UPAO no necesita acceso general a Industria. Un almacenero de Industria asignado a UPAO puede revisar sus requerimientos sin recibir acceso general a documentos de la compañía UPAO.
+
+La propiedad del contacto puede corresponder a una u otra compañía, o estar compartida: no se infiere la compañía solicitante desde el contacto ni desde su nombre. El administrador configura ambas empresas explícitamente. El consolidado agrupa por producto, almacén y empresa abastecedora antes de descontar stock, sin duplicar el stock de Industria por cada compañía solicitante. Ver [SUPPLY_COMPANIES.md](SUPPLY_COMPANIES.md) para configuración, límites y actualización probada. La venta/factura/entrega por el flujo habitual sigue fuera de este registro informativo.

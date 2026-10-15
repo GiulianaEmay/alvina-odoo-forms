@@ -3,17 +3,6 @@ on: [push, pull_request, workflow_dispatch]
 jobs:
   community-integration:
     runs-on: ubuntu-24.04
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: odoo_test
-          POSTGRES_PASSWORD: local_ci_only
-          POSTGRES_DB: postgres
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd 'pg_isready -U odoo_test'
-          --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -32,7 +21,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libldap2-dev libsasl2-dev libpq-dev libxml2-dev libxslt1-dev libjpeg-dev zlib1g-dev libffi-dev libssl-dev build-essential
           CC=gcc python -m pip install -r .odoo-runtime/requirements.txt
-          python -m pip install websocket-client==1.8.0
+          python -m pip install pgserver==0.1.4 psutil==5.9.8 websocket-client==1.8.0
           npm install --prefix /tmp/alvina-js-test --no-package-lock --no-audit --no-fund jsdom@26.1.0
           command -v google-chrome || command -v chromium
       - name: Local validation and frontend behavior
@@ -40,10 +29,12 @@ jobs:
           python -m unittest discover -s tools -v
           python -m compileall -q alvina_branch_requisition
           NODE_PATH=/tmp/alvina-js-test/node_modules node --test tools/test_frontend.cjs
+      - name: Start disposable PostgreSQL over a local socket
+        run: python tools/ci_postgres.py
       - name: Install and test in disposable Community database
         run: |
           python .odoo-runtime/odoo-bin --addons-path="$PWD/.odoo-runtime/addons,$PWD" \
-            --data-dir=/tmp/alvina-odoo-data --db_host=127.0.0.1 --db_user=odoo_test \
-            --db_password=local_ci_only -d alvina_ci_test -i alvina_branch_requisition \
+            --data-dir=/tmp/alvina-odoo-data --db_host=/tmp/alvina-ci-pg --db_user=odoo_test \
+            -d alvina_ci_test -i alvina_branch_requisition \
             --test-enable --test-tags=/alvina_branch_requisition --stop-after-init \
             --without-demo --http-interface=127.0.0.1 --http-port=8079

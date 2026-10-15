@@ -135,7 +135,11 @@ class TestRequisitionSecurity(TransactionCase):
 
     def test_product_of_another_company_is_rejected(self):
         other_company = self.env['res.company'].create({'name': 'Security product company'})
-        product = self.product.copy({'company_id': other_company.id})
+        product = self.env['product.product'].create({
+            'name': 'Security other-company product', 'company_id': other_company.id,
+            'categ_id': self.product.categ_id.id, 'alvina_requisition_enabled': True,
+        })
+        self.assertTrue(product.exists())
         with self.assertRaises(UserError), self.cr.savepoint():
             self._request(line_ids=[Command.create({
                 'product_id': product.id, 'product_qty': 5,
