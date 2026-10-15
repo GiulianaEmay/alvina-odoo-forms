@@ -61,3 +61,30 @@ test('cantidades negativas conservadas en otra categoría bloquean envío', () =
     assert.equal(x.d.querySelector('button').disabled, false);
     x.dom.window.close();
 });
+
+test('borrar una cantidad entre categorías permite enviar los demás productos', () => {
+    const x = setup();
+    x.quantity('3'); x.category('Útiles de limpieza'); x.quantity('5');
+    x.category('Comerciales'); x.quantity(''); x.category('Útiles de limpieza');
+    assert.equal(x.submit().defaultPrevented, false);
+    assert.deepEqual(JSON.parse(x.d.getElementById('alvina-lines').value), [{ id: 2, qty: '5' }]);
+    assert.equal(x.alerts(), 0);
+    x.dom.window.close();
+});
+
+test('un número incompleto oculto en otra categoría conserva su error', () => {
+    const x = setup();
+    const input = x.d.querySelector('#alvina-products input');
+    input.value = '';
+    // jsdom does not simulate the browser's incomplete numeric editor state.
+    Object.defineProperty(input, 'validity', { value: { badInput: true } });
+    input.dispatchEvent(new x.w.Event('input'));
+    x.category('Útiles de limpieza'); x.quantity('2');
+    assert.ok(x.submit().defaultPrevented);
+    x.category('Comerciales');
+    assert.equal(x.d.querySelector('#alvina-products input').validity.customError, true);
+    x.quantity('');
+    assert.equal(x.submit().defaultPrevented, false);
+    assert.deepEqual(JSON.parse(x.d.getElementById('alvina-lines').value), [{ id: 2, qty: '2' }]);
+    x.dom.window.close();
+});

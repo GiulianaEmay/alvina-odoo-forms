@@ -32,7 +32,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libldap2-dev libsasl2-dev libpq-dev libxml2-dev libxslt1-dev libjpeg-dev zlib1g-dev libffi-dev libssl-dev build-essential
           CC=gcc python -m pip install -r .odoo-runtime/requirements.txt
+          python -m pip install websocket-client==1.8.0
           npm install --prefix /tmp/alvina-js-test --no-package-lock --no-audit --no-fund jsdom@26.1.0
+          command -v google-chrome || command -v chromium
       - name: Local validation and frontend behavior
         run: |
           python -m unittest discover -s tools -v

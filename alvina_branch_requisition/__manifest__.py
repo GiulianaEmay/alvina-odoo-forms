@@ -1,9 +1,9 @@
 {
     'name': 'Alviña - Requerimientos de sucursales',
-    'version': '19.0.1.0.0',
+    'version': '19.0.1.0.1',
     'author': 'Grupo Alviña',
     'license': 'LGPL-3',
-    'depends': ['purchase', 'stock', 'purchase_stock', 'portal'],
+    'depends': ['purchase', 'stock', 'purchase_stock', 'portal', 'website'],
     'data': ['security/groups.xml', 'security/ir.model.access.csv',
              'security/rules.xml', 'data/sequence.xml', 'views/backend.xml',
              'views/templates.xml'],

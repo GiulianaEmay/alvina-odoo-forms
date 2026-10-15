@@ -1,6 +1,6 @@
 # Alviña — Requerimientos de sucursales
 
-Addon técnico `alvina_branch_requisition`, versión objetivo Odoo 19. No crea una aplicación: `application=False`, sin menú raíz ni icono. Depende de `purchase`, `stock`, `purchase_stock`, `portal` (y sus dependencias transitivas). No requiere bibliotecas frontend externas.
+Addon técnico `alvina_branch_requisition`, versión objetivo Odoo 19. No crea una aplicación: `application=False`, sin menú raíz ni icono. Depende de `purchase`, `stock`, `purchase_stock`, `portal`, `website` (y sus dependencias transitivas). No requiere bibliotecas frontend externas.
 
 ## Menús y aislamiento
 
@@ -11,9 +11,11 @@ No se modifican los archivos de purchase ni Ventas, ni las acciones de cotizaci�
 
 ## Integración adaptable, pendiente de validar
 
-`alvina.branch.binding` es un vínculo de configuración, NO un catálogo paralelo de sucursales. Un administrador selecciona un registro real existente mediante `resource_ref`, su compañía, almacén abastecedor y usuarios autorizados. Se impiden vínculos repetidos y cambios de identidad/almacén cuando existe historial. No vincular entidades arbitrarias: primero confirmar cuál representa realmente la sucursal en la instalación. El administrador asigna también los almaceneros a las sucursales bajo su responsabilidad. Las reglas globales restringen cabeceras y líneas por compañía y asignación; ser administrador no concede acceso a todas las solicitudes.
+`alvina.branch.binding` vincula un contacto de sucursal existente (`res.partner`), su compañía, almacén abastecedor y usuarios autorizados. No crea contactos ni sucursales. El selector se limita a contactos; un adaptador explícito puede extender los modelos permitidos, nunca habilitar indiscriminadamente toda la base. Se impiden vínculos repetidos y cambios de identidad/almacén cuando existe historial; cambiar un almacén en ese caso requiere una migración controlada, no archivar y duplicar el contacto. El administrador asigna también los almaceneros a las sucursales bajo su responsabilidad. Las reglas globales restringen cabeceras y líneas por compañía y asignación; ser administrador no concede acceso a todas las solicitudes.
 
-Pendientes: modelo real y sincronización con asignaciones de usuarios existentes; reglas específicas del negocio; categorías homónimas o categorías hijas; política de almacenes; abastecimientos ya asignados; compatibilidad con addons privados; inspección de plantillas/controlador de `/portal/production/new`. El diseño granate es provisional y NO se afirma equivalencia visual con el formulario desconocido de Ventas.
+El ZIP `alvinha-cybe.zip` permitió localizar `/portal/production/new` en `alvinha_mrp` y la clasificación `res.partner.type_client = 'branch'` en `alvinha_base`. No contiene una relación personalizada de usuarios con varias sucursales. Véase [INTEGRATION.md](INTEGRATION.md) para referencias y dónde colocar la carpeta del addon. En la instalación real se deben seleccionar únicamente contactos de sucursales reales; el núcleo no instala ni simula los campos privados.
+
+Pendientes: confirmar la revisión desplegada, asignaciones de usuarios en la base, configuración de almacenes, categorías homónimas/hijas, abastecimientos asignados y coexistencia con Enterprise y módulos privados. La presentación propia utiliza el mismo `website.layout`, color de título y patrones Bootstrap encontrados; la equivalencia exacta del tema requiere una base de pruebas con ese tema.
 
 Las categorías se resuelven por sus cuatro nombres exactos, no por IDs: Comerciales, Útiles de escritorio, Útiles de limpieza, Envases y embalajes. No se crean categorías. Los productos deben estar activos y habilitados explícitamente mediante `alvina_requisition_enabled` en su ficha. No se consulta stock para permitir solicitudes. Orden natural por código, nombre e ID; conserva la representación y los ceros iniciales; sin código al final. No incluye subcategorías automáticamente.
 
@@ -72,7 +74,7 @@ Suite de integración que exige Odoo/PostgreSQL y base aislada:
 
 La suite contiene pruebas de creación, acceso a cabeceras y líneas, inmutabilidad, productos deshabilitados, cantidades negativas, duplicados, compañía y consolidación/cancelación. Las pruebas Python sin Odoo no validan ACL, vistas ni ejecución de Odoo. La suite se ejecutó en una instancia temporal de Odoo 19 Community y PostgreSQL local. Véase TESTING.md para versiones, resultados y límites; no se validó Enterprise ni la instalación real de Alviña.
 
-Antes de aceptar para despliegue faltan pruebas con Enterprise y addons reales, navegador completo, doble envío concurrente, aislamiento multiempresa con datos operativos, reservas/recepciones reales y regresión del formulario de Ventas desconocido. Las comprobaciones HTTP y DOM locales se detallan en TESTING.md.
+La suite incluye una prueba con Chromium real: carga de assets, orden de productos, persistencia entre categorías, borrado de cantidad y envío al servidor. Requiere Chromium/Chrome y `websocket-client==1.8.0`; comprobar que el runner no la marque como omitida. Antes de aceptar para despliegue faltan pruebas con Enterprise, tema y addons reales, doble envío concurrente, datos operativos y regresión del formulario de producción existente. Las comprobaciones locales se detallan en TESTING.md.
 
 ## Desinstalar y verificar
 
@@ -80,7 +82,7 @@ En la base de pruebas, respaldar base y filestore y desinstalar desde Aplicacion
 
 ## GitHub
 
-Rama prevista: `feature/branch-requisition-form`. Revisar el diff, ejecutar la suite Odoo y crear un PR contra la rama base cuando exista. El repositorio originalmente no tenía `main`: un PR necesita una rama base y un historial comparables. No se crea una rama principal ni se fusionan cambios automáticamente. Subir la rama no instala el addon en Odoo. No desplegar ni fusionar sin autorización.
+Rama prevista: `feature/branch-requisition-form`. Revisar el diff, ejecutar la suite Odoo y crear un PR contra la rama base cuando exista. El repositorio originalmente no tenía `main`: un PR necesita una rama base y un historial comparables. No se crea una rama principal ni se fusionan cambios automáticamente. Subir la rama a este repositorio de desarrollo no instala el addon en Odoo. En el repositorio operativo, confirmar antes si la rama elegida dispara despliegues automáticos. No desplegar ni fusionar sin autorización.
 
 Pruebas de interacción DOM (jsdom, dependencia solo de pruebas):
 

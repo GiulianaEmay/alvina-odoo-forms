@@ -30,9 +30,8 @@ class BranchRequest(models.Model):
             branch = self.env['alvina.branch.binding'].browse(vals.get('branch_id')).exists()
             if not branch or not branch.active or self.env.user not in branch.user_ids or branch.company_id not in self.env.companies:
                 raise AccessError(_('Sucursal no autorizada.'))
-            # Only check existence here; reading arbitrary branch fields remains adapter-specific.
-            if not branch.sudo().resource_ref.exists():
-                raise ValidationError(_('La sucursal vinculada ya no existe.'))
+            if not branch._resource_is_available():
+                raise ValidationError(_('La sucursal vinculada ya no está disponible en esta compañía.'))
             if vals.get('state', 'pending') != 'pending' or vals.get('user_id', self.env.uid) != self.env.uid:
                 raise AccessError(_('Datos de solicitud no autorizados.'))
             if not vals.get('line_ids'):

@@ -1,1 +1,1 @@
-from . import test_request, test_portal
+from . import test_request, test_portal, test_security

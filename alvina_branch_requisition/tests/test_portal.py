@@ -67,3 +67,63 @@ class TestPortal(HttpCase):
         self.authenticate('alvina-portal-test', 'local-test-only')
         response = self.url_open('/branch/requisition/submit', data={'branch_id': self.branch.id})
         self.assertEqual(response.status_code, 400)
+
+    def test_browser_assets_categories_clear_quantity_and_submit(self):
+        # HttpCase browser_js authenticates with login == password for test users.
+        self.user.password = self.user.login
+        self.product.default_code = '10'
+        self.env['product.product'].create({
+            'name': 'Orden anterior', 'default_code': '2',
+            'categ_id': self.product.categ_id.id, 'alvina_requisition_enabled': True})
+        cleaning = self.env['product.category'].create({'name': 'Útiles de limpieza'})
+        self.env['product.product'].create({
+            'name': 'Jabón navegador', 'categ_id': cleaning.id,
+            'alvina_requisition_enabled': True})
+        self.browser_js('/branch/requisition/new', r'''
+            (async () => {
+                const assert = (condition, message) => { if (!condition) throw new Error(message); };
+                const form = document.querySelector('#alvina-request-form');
+                const category = document.querySelector('#alvina-category');
+                const changeCategory = value => {
+                    category.value = value;
+                    category.dispatchEvent(new Event('change', {bubbles: true}));
+                };
+                const quantity = name => [...document.querySelectorAll('#alvina-products tr')]
+                    .find(row => row.textContent.includes(name)).querySelector('input');
+                const setQuantity = (name, value) => {
+                    const input = quantity(name);
+                    input.value = value;
+                    input.dispatchEvent(new Event('input', {bubbles: true}));
+                };
+                assert(document.querySelector('#alvina-branch').disabled, 'Single branch must be locked');
+                assert(!form.querySelector('[name="company_id"]'), 'Company must not be shown');
+                assert(category.options.length === 4, 'Four approved categories required');
+                assert(getComputedStyle(document.querySelector('.alvina-requisition h2')).color === 'rgb(104, 20, 18)', 'Corporate heading color');
+                const rows = document.querySelectorAll('#alvina-products tr');
+                assert(rows[0].textContent.includes('Orden anterior'), 'Natural order 2 before 10');
+                setQuantity('Producto portal', '3');
+                changeCategory('Útiles de limpieza');
+                setQuantity('Jabón navegador', '5');
+                changeCategory('Comerciales');
+                assert(quantity('Producto portal').value === '3', 'Quantity must persist across categories');
+                setQuantity('Producto portal', '');
+                changeCategory('Útiles de limpieza');
+                assert(quantity('Jabón navegador').value === '5', 'Other category quantity must persist');
+                document.querySelector('#alvina-date').value = new Date().toISOString().slice(0,10);
+                assert(form.checkValidity(), 'Form must be valid');
+                const event = new Event('submit', {bubbles: true, cancelable: true});
+                form.dispatchEvent(event);
+                assert(!event.defaultPrevented, 'Cleared quantity must not block remaining products');
+                const lines = JSON.parse(document.querySelector('#alvina-lines').value);
+                assert(lines.length === 1 && lines[0].qty === '5', 'Only positive remaining product must be sent');
+                const response = await fetch(form.action, {method: 'POST', body: new FormData(form)});
+                const html = await response.text();
+                assert(response.ok && html.includes('Requerimiento recibido'), 'Real browser POST must succeed');
+                console.log('test successful');
+            })().catch(error => { console.error(error.stack || error); });
+        ''', login=self.user.login,
+            ready="document.querySelector('#alvina-request-form')?.dataset.ready === '1'", timeout=90)
+        record = self.env['alvina.branch.request'].search([('user_id', '=', self.user.id)])
+        self.assertEqual(len(record), 1)
+        self.assertEqual(len(record.line_ids), 1)
+        self.assertEqual(record.line_ids.product_qty, 5)

@@ -79,10 +79,12 @@ class TestRequisition(TransactionCase):
 
     def test_other_company_is_rejected(self):
         other = self.env['res.company'].create({'name': 'Otra compañía prueba'})
+        partner = self.env['res.partner'].create({
+            'name': 'Sucursal otra compañía', 'company_id': other.id})
         # A branch cannot assign a user without access to its company.
         with self.assertRaises(ValidationError), self.cr.savepoint():
             self.env['alvina.branch.binding'].create({
-                'resource_ref': 'res.company,%s' % other.id, 'company_id': other.id,
+                'resource_ref': 'res.partner,%s' % partner.id, 'company_id': other.id,
                 'warehouse_id': self.warehouse.id, 'user_ids': [Command.set(self.user.ids)]})
 
     def test_consolidation_and_cancel_exclusion(self):
@@ -176,3 +178,24 @@ class TestRequisition(TransactionCase):
         self.assertEqual(wizard.line_ids.suggested_qty, 7)
         self.assertEqual(self.env['stock.move'].search_count([]), before_moves)
         self.assertEqual(self.env['purchase.order'].search_count([]), before_orders)
+
+    def test_consolidation_uses_product_precision_for_fractional_quantities(self):
+        self.env.ref('uom.decimal_product_uom').write({'digits': 3})
+        self.product.uom_id.invalidate_recordset(['rounding'])
+        self.user.group_ids = [Command.link(self.env.ref('alvina_branch_requisition.group_keeper').id)]
+        self.create_request(line_ids=[Command.create({'product_id': self.product.id, 'product_qty': 0.015})])
+        self.env['stock.quant']._update_available_quantity(self.product, self.warehouse.lot_stock_id, 0.005)
+        move = self.env['stock.move'].create({
+            'product_id': self.product.id, 'product_uom_qty': 0.003,
+            'product_uom': self.product.uom_id.id,
+            'location_id': self.env.ref('stock.stock_location_suppliers').id,
+            'location_dest_id': self.warehouse.lot_stock_id.id,
+            'picking_type_id': self.warehouse.in_type_id.id, 'company_id': self.company.id})
+        move._action_confirm()
+        wizard = self.env['alvina.branch.consolidation'].with_user(self.user).create({})
+        wizard.action_refresh()
+        row = wizard.line_ids.filtered(lambda line: line.product_id == self.product)
+        for name, value in [('product_qty', 0.015), ('free_qty', 0.005),
+                            ('incoming_qty', 0.003), ('suggested_qty', 0.007)]:
+            self.assertAlmostEqual(row[name], value, places=3)
+            self.assertEqual(row.fields_get([name])[name]['digits'], (16, 3))

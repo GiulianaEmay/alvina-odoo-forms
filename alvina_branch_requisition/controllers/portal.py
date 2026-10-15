@@ -13,7 +13,8 @@ class RequisitionPortal(http.Controller):
 
     def _branches(self):
         return request.env['alvina.branch.binding'].search([
-            ('user_ids', 'in', request.env.uid), ('company_id', 'in', request.env.companies.ids)])
+            ('user_ids', 'in', request.env.uid), ('company_id', 'in', request.env.companies.ids)]).filtered(
+                lambda branch: branch._resource_is_available())
 
     def _products(self, company):
         # Narrow sudo: expose only name/code/UoM and IDs of explicitly enabled products.
