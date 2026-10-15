@@ -16,13 +16,15 @@ class RequisitionPortal(http.Controller):
             ('user_ids', 'in', request.env.uid), ('company_id', 'in', request.env.companies.ids)]).filtered(
                 lambda branch: branch._resource_is_available())
 
-    def _products(self, company):
+    def _products(self, branch):
         # Narrow sudo: expose only name/code/UoM and IDs of explicitly enabled products.
         # Portal users have no general product catalog access. Creation uses normal ACLs.
+        company = branch.company_id
+        companies = [False, company.id] if company == branch.sudo().supply_company_id else [False]
         return request.env['product.product'].sudo().search([
             ('active', '=', True), ('product_tmpl_id.active', '=', True),
             ('alvina_requisition_enabled', '=', True), ('categ_id.name', 'in', CATEGORIES),
-            ('company_id', 'in', [False, company.id])])
+            ('company_id', 'in', companies)])
 
     def _render(self, error=None):
         branches = self._branches()
@@ -31,7 +33,7 @@ class RequisitionPortal(http.Controller):
         request.session['alvina_form_tokens'] = tokens + [token]
         catalogs = {}
         for branch in branches:
-            products = sorted(self._products(branch.company_id), key=lambda p: natural_key(p.default_code, p.name, p.id))
+            products = sorted(self._products(branch), key=lambda p: natural_key(p.default_code, p.name, p.id))
             catalogs[str(branch.id)] = [{'id': p.id, 'name': p.display_name, 'category': p.categ_id.name,
                 'uom': p.uom_id.name, 'rounding': p.uom_id.rounding} for p in products]
         return request.render('alvina_branch_requisition.form', {
@@ -56,7 +58,7 @@ class RequisitionPortal(http.Controller):
             raw = json.loads(post.get('lines', '[]'))
             if not isinstance(raw, list) or len(raw) > 10000:
                 raise ValueError('Detalle inválido')
-            products = {p.id: p for p in self._products(branch.company_id)}
+            products = {p.id: p for p in self._products(branch)}
             seen, commands = set(), []
             for item in raw:
                 pid = item['id']

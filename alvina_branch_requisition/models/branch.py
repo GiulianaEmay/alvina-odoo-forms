@@ -9,8 +9,11 @@ class BranchBinding(models.Model):
     name = fields.Char(compute='_compute_name')
     active = fields.Boolean(default=True)
     resource_ref = fields.Reference(selection='_reference_models', required=True, string='Sucursal existente')
-    company_id = fields.Many2one('res.company', required=True, default=lambda self: self.env.company)
-    warehouse_id = fields.Many2one('stock.warehouse', required=True, check_company=True)
+    company_id = fields.Many2one('res.company', string='Compañía solicitante', required=True, default=lambda self: self.env.company)
+    # Deliberately cross-company: the warehouse belongs to the supplying company.
+    warehouse_id = fields.Many2one('stock.warehouse', string='Almacén abastecedor', required=True, ondelete='restrict')
+    supply_company_id = fields.Many2one(related='warehouse_id.company_id', string='Compañía abastecedora', store=True)
+    keeper_ids = fields.Many2many('res.users', 'alvina_binding_keeper_rel', 'binding_id', 'user_id', string='Almaceneros autorizados')
     user_ids = fields.Many2many('res.users', string='Usuarios autorizados')
     _check_company_auto = True
     _unique_resource = models.Constraint('UNIQUE(resource_ref)', 'La sucursal ya está vinculada.')
@@ -41,9 +44,10 @@ class BranchBinding(models.Model):
             target = rec.sudo().resource_ref
             rec.name = target.display_name if target and target._name in allowed_models and target.exists() else _('Sucursal no disponible')
 
-    @api.constrains('resource_ref', 'company_id', 'warehouse_id', 'user_ids')
+    @api.constrains('resource_ref', 'company_id', 'warehouse_id', 'user_ids', 'keeper_ids')
     def _check_binding(self):
         for rec in self:
+            rec.warehouse_id.check_access('read')
             target = rec.resource_ref
             if not target or not target.exists():
                 raise ValidationError(_('Seleccione una sucursal existente.'))
@@ -54,6 +58,9 @@ class BranchBinding(models.Model):
                 raise ValidationError(_('La sucursal pertenece a otra compañía.'))
             if any(rec.company_id not in user.company_ids for user in rec.user_ids):
                 raise ValidationError(_('Los usuarios deben tener acceso a la compañía.'))
+            if any(rec.supply_company_id not in user.company_ids or not user.has_group(
+                    'alvina_branch_requisition.group_keeper') for user in rec.keeper_ids):
+                raise ValidationError(_('Los almaceneros deben tener el grupo Alviña: Almacenero y acceso a la compañía abastecedora.'))
 
     def write(self, vals):
         if set(vals) & {'resource_ref', 'company_id', 'warehouse_id'}:

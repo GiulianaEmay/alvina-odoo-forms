@@ -1,5 +1,36 @@
 # Evidencia de validación — 15 de octubre de 2026
 
+## Abastecimiento multiempresa — versión 19.0.1.1.0
+
+Validado en este entorno cloud el 15 de octubre de 2026, partiendo de `bf19163`:
+
+- **49 pruebas Odoo: 0 fallos, 0 errores, sin omisiones.** 17 de solicitudes, 11 de seguridad existente, 7 HTTP/navegador (incluida UPAO → Industria), 10 de abastecimiento multiempresa y 4 de migración PostgreSQL. El contador de `odoo.tests.result` es el resultado; las estadísticas auxiliares incluyen preparación de clases.
+- **6 pruebas Python y 5 pruebas DOM: aprobadas.** Compilación Python y `git diff --check`: correctos.
+- **Chromium real ejecutado** en la suite completa: assets, categorías, cantidades y envío con CSRF. No se sustituyó por jsdom ni se omitió.
+- Instalación inicial del addon en Community y ejecución posterior de la suite completa tras actualizarlo: correctas.
+- **Actualización histórica real comprobada:** se exportó el addon de `bf19163` fuera del checkout, se instaló en la base desechable `alvina_upgrade_history_test`, se crearon y confirmaron dos solicitudes con sus líneas y se actualizó a `19.0.1.1.0`. Se verificó que las dos cabeceras y las dos líneas tenían compañía/almacén abastecedores correctos, manteniendo compañía solicitante, autor, estado y cantidades. No se valida una actualización real con una base vacía como sustituto de esta comprobación.
+
+La primera ejecución detectó acceso de un almacenero a un consolidado ajeno. Se añadieron reglas de propietario para cabeceras y líneas transitorias; la regresión ahora pasa. Las pruebas distinguen las ACL de modelo de Odoo (un usuario interno puede leer modelos de stock) del acceso real a registros de Industria, que queda denegado a UPAO. El consolidado respeta las reglas normales de stock sin elevar permisos.
+
+Runtime: Odoo 19 Community `e1ed4fe077ba98ce7ac6802a43bb68242081dee9` en `/workspace/odoo-runtime`; Python 3.12.14, venv `/workspace/shared/alvina-venv`, Node 24.19.0, jsdom 26.1.0, PostgreSQL de `pgserver==0.1.4` y Chromium. Se omitió `python-ldap` por falta de cabeceras SASL (no se usa `auth_ldap`) y se usó `psycopg2-binary==2.9.9` en lugar de compilar la misma versión. No se desactivaron verificaciones TLS. PostgreSQL reducido no incluye `pg_trgm`: su instalación produjo la advertencia correspondiente; no se validan búsquedas trigram.
+
+Comando de la suite completa en esta máquina (solo base desechable):
+
+```bash
+/workspace/shared/alvina-venv/bin/python /workspace/odoo-runtime/odoo-bin \
+  --addons-path=/workspace/odoo-runtime/addons,/workspace/alvina-odoo-forms \
+  --data-dir=/workspace/shared/alvina-data --db_host=/workspace/shared/alvina-pg \
+  --db_user=alvina_test -d alvina_central_test -u alvina_branch_requisition \
+  --test-enable --test-tags=/alvina_branch_requisition --stop-after-init \
+  --without-demo --http-interface=127.0.0.1 --http-port=8079
+```
+
+Para la primera instalación en una base nueva usar `-i` en lugar de `-u`. El workflow existente de GitHub Actions usa ese camino y descubre también las pruebas nuevas; no se afirma haber ejecutado Actions remotamente.
+
+Evidencia local de esta ejecución: `/tmp/alvina-central-tests-verified.log`, `/tmp/alvina-upgrade-history-install.log`, `/tmp/alvina-upgrade-history-seed.log`, `/tmp/alvina-upgrade-history-run.log` y `/tmp/alvina-upgrade-history-verify.log`. Son archivos del entorno, no resultados de la cuenta anterior.
+
+Enterprise, módulos privados, tema y datos reales siguen pendientes; véase [MULTICOMPANY.md](MULTICOMPANY.md). No se reinició ni contactó el servidor real y no se desplegó en producción.
+
 ## Resultado de la auditoría 19.0.1.0.1
 
 - **34 pruebas Odoo: 0 fallos, 0 errores.** Incluye 17 de modelos/configuración, 6 HTTP/navegador y 11 de seguridad. Conteo tomado de `odoo.tests.result`; el contador auxiliar de estadísticas incluye preparación de clases.

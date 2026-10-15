@@ -23,6 +23,7 @@ class Consolidation(models.TransientModel):
         self.ensure_one()
         if not self.env.user.has_group('alvina_branch_requisition.group_keeper'):
             raise AccessError(_('Acción reservada al almacenero.'))
+        self.check_access('write')
         self.line_ids.unlink()
         lines = self.env['alvina.branch.request.line'].search([
             ('request_id.state', 'in', ['pending', 'review', 'partial']), ('qty_pending', '>', 0)])
@@ -30,11 +31,18 @@ class Consolidation(models.TransientModel):
         for line in lines:
             if line.product_uom_id != line.product_id.uom_id:
                 raise ValidationError(_('La unidad de un producto cambió después del requerimiento. Revise sus solicitudes antes de consolidar.'))
-            key = (line.product_id, line.branch_id.warehouse_id, line.company_id)
+            if line.supply_company_id not in self.env.companies:
+                raise AccessError(_('Active la compañía abastecedora autorizada para consultar su stock.'))
+            key = (line.product_id, line.warehouse_id, line.supply_company_id)
             groups.setdefault(key, self.env['alvina.branch.request.line'])
             groups[key] |= line
         for (product, warehouse, company), detail in groups.items():
-            stock = product.with_company(company).with_context(warehouse_id=warehouse.id)
+            # Keep normal stock ACLs and record rules in the supplying company.
+            # Ignore caller-provided location/date filters for this live summary.
+            stock = product.with_company(company).with_context(
+                allowed_company_ids=[company.id], warehouse_id=warehouse.id,
+                location=False, search_location=False, search_warehouse=False, lot_id=False, owner_id=False, package_id=False,
+                from_date=False, to_date=False)
             demand = sum(detail.mapped('qty_pending'))
             free, incoming = stock.free_qty, stock.incoming_qty
             self.env['alvina.branch.consolidation.line'].create({
@@ -52,7 +60,7 @@ class ConsolidationLine(models.TransientModel):
     product_id = fields.Many2one('product.product', readonly=True)
     product_uom_id = fields.Many2one(related='product_id.uom_id')
     warehouse_id = fields.Many2one('stock.warehouse', readonly=True)
-    company_id = fields.Many2one('res.company', readonly=True)
+    company_id = fields.Many2one('res.company', string='Compañía abastecedora', readonly=True)
     product_qty = fields.Float(string='Pendiente', readonly=True, digits='Product Unit')
     free_qty = fields.Float(string='Stock libre', readonly=True, digits='Product Unit')
     incoming_qty = fields.Float(string='Entradas confirmadas', readonly=True, digits='Product Unit')

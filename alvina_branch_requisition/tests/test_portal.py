@@ -127,3 +127,50 @@ class TestPortal(HttpCase):
         self.assertEqual(len(record), 1)
         self.assertEqual(len(record.line_ids), 1)
         self.assertEqual(record.line_ids.product_qty, 5)
+
+
+@tagged('post_install', '-at_install')
+class TestCrossCompanyPortal(HttpCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.supply_company = cls.env.company
+        cls.request_company = cls.env['res.company'].create({'name': 'UPAO portal test'})
+        cls.user = cls.env['res.users'].create({
+            'name': 'UPAO portal requester', 'login': 'upao-cross-portal', 'password': 'local-test-only',
+            'company_id': cls.request_company.id, 'company_ids': [Command.set(cls.request_company.ids)],
+            'group_ids': [Command.set([cls.env.ref('base.group_portal').id,
+                cls.env.ref('alvina_branch_requisition.group_requester').id])]})
+        warehouse = cls.env['stock.warehouse'].search([
+            ('company_id', '=', cls.supply_company.id)], limit=1)
+        partner = cls.env['res.partner'].create({
+            'name': 'UPAO existing portal branch', 'company_id': cls.request_company.id})
+        cls.branch = cls.env['alvina.branch.binding'].create({
+            'resource_ref': f'res.partner,{partner.id}', 'company_id': cls.request_company.id,
+            'warehouse_id': warehouse.id, 'user_ids': [Command.set(cls.user.ids)]})
+        category = cls.env['product.category'].create({'name': 'Comerciales'})
+        cls.product = cls.env['product.product'].create({
+            'name': 'Shared UPAO portal product', 'categ_id': category.id, 'alvina_requisition_enabled': True})
+        cls.private_products = cls.product.copy({'name': 'Private Industria catalog', 'company_id': cls.supply_company.id})
+        cls.private_products |= cls.product.copy({'name': 'Private UPAO catalog', 'company_id': cls.request_company.id})
+
+    def test_cross_company_form_catalog_and_real_submit(self):
+        import json
+        self.authenticate(self.user.login, 'local-test-only')
+        response = self.url_open('/branch/requisition/new')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(self.product.name, response.text)
+        for private in self.private_products:
+            self.assertNotIn(private.name, response.text)
+        soup = BeautifulSoup(response.content, 'html.parser')
+        values = {i['name']: i.get('value', '') for i in soup.select('input[name]')}
+        values.update(required_date=str(fields.Date.today()),
+                      lines=json.dumps([{'id': self.product.id, 'qty': '4'}]))
+        response = self.url_open('/branch/requisition/submit', data=values)
+        self.assertIn('Requerimiento recibido', response.text)
+        rec = self.env['alvina.branch.request'].search([('user_id', '=', self.user.id)])
+        self.assertEqual(len(rec), 1)
+        self.assertEqual(rec.supply_company_id, self.supply_company)
+        self.assertEqual(rec.line_ids.company_id, self.request_company)
+        self.assertEqual(rec.line_ids.qty_pending, 4)
+        self.assertNotIn(self.supply_company, self.user.company_ids)

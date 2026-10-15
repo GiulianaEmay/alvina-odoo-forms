@@ -7,6 +7,7 @@
             <list>
                 <field name="name"/>
                 <field name="company_id"/>
+                <field name="supply_company_id"/>
                 <field name="warehouse_id"/>
                 <field name="active"/>
             </list>
@@ -21,7 +22,9 @@
                     <group>
                         <field name="resource_ref"/>
                         <field name="company_id"/>
-                        <field name="warehouse_id" domain="[('company_id', '=', company_id)]"/>
+                        <field name="warehouse_id"/>
+                        <field name="supply_company_id"/>
+                        <field name="keeper_ids" widget="many2many_tags"/>
                         <field name="user_ids" widget="many2many_tags"/>
                         <field name="active"/>
                     </group>
@@ -49,6 +52,8 @@
         <field name="arch" type="xml">
             <list create="0" edit="0" delete="0">
                 <field name="company_id"/>
+                <field name="supply_company_id"/>
+                <field name="warehouse_id"/>
                 <field name="branch_id"/>
                 <field name="request_id"/>
                 <field name="product_id"/>
@@ -86,6 +91,9 @@
                     <group>
                         <field name="name"/>
                         <field name="branch_id"/>
+                        <field name="company_id"/>
+                        <field name="supply_company_id"/>
+                        <field name="warehouse_id"/>
                         <field name="user_id"/>
                         <field name="request_date"/>
                         <field name="required_date"/>
