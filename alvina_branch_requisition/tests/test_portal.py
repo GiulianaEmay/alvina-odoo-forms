@@ -1,0 +1,69 @@
+from bs4 import BeautifulSoup
+from odoo import Command, fields
+from odoo.tests import HttpCase, tagged
+
+
+@tagged('post_install', '-at_install')
+class TestPortal(HttpCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.user = cls.env['res.users'].create({
+            'name': 'Portal solicitante', 'login': 'alvina-portal-test',
+            'password': 'local-test-only',
+            'group_ids': [Command.set([cls.env.ref('base.group_portal').id,
+                cls.env.ref('alvina_branch_requisition.group_requester').id])]})
+        cls.warehouse = cls.env['stock.warehouse'].search([('company_id', '=', cls.env.company.id)], limit=1)
+        cls.partner = cls.env['res.partner'].create({'name': 'Sucursal portal prueba'})
+        cls.branch = cls.env['alvina.branch.binding'].create({
+            'resource_ref': 'res.partner,%s' % cls.partner.id, 'company_id': cls.env.company.id,
+            'warehouse_id': cls.warehouse.id, 'user_ids': [Command.set(cls.user.ids)]})
+        category = cls.env['product.category'].create({'name': 'Comerciales'})
+        cls.product = cls.env['product.product'].create({'name': 'Producto portal',
+            'categ_id': category.id, 'alvina_requisition_enabled': True})
+
+    def form(self):
+        self.authenticate('alvina-portal-test', 'local-test-only')
+        response = self.url_open('/branch/requisition/new')
+        self.assertEqual(response.status_code, 200)
+        return BeautifulSoup(response.content, 'html.parser')
+
+    def test_anonymous_requires_login(self):
+        response = self.url_open('/branch/requisition/new')
+        self.assertIn('/web/login', response.url)
+
+    def test_single_branch_locked_and_submit(self):
+        import json
+        soup = self.form()
+        self.assertTrue(soup.select_one('#alvina-branch').has_attr('disabled'))
+        values = {i['name']: i.get('value', '') for i in soup.select('input[name]')}
+        values.update(required_date=str(fields.Date.today()),
+                      lines=json.dumps([{'id': self.product.id, 'qty': '2'}]))
+        response = self.url_open('/branch/requisition/submit', data=values)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('Requerimiento recibido', response.text)
+        record = self.env['alvina.branch.request'].search([('user_id', '=', self.user.id)])
+        self.assertEqual(len(record), 1)
+        self.assertEqual(record.line_ids.product_qty, 2)
+        self.url_open('/branch/requisition/submit', data=values)
+        self.assertEqual(self.env['alvina.branch.request'].search_count([('user_id', '=', self.user.id)]), 1)
+
+    def test_no_branch(self):
+        self.branch.user_ids = [Command.clear()]
+        soup = self.form()
+        self.assertIsNone(soup.select_one('#alvina-request-form'))
+        self.assertIn('No tienes sucursales asignadas', soup.get_text())
+
+    def test_multiple_branches(self):
+        partner = self.env['res.partner'].create({'name': 'Segunda sucursal portal'})
+        self.env['alvina.branch.binding'].create({
+            'resource_ref': 'res.partner,%s' % partner.id, 'company_id': self.env.company.id,
+            'warehouse_id': self.warehouse.id, 'user_ids': [Command.set(self.user.ids)]})
+        soup = self.form()
+        self.assertFalse(soup.select_one('#alvina-branch').has_attr('disabled'))
+        self.assertEqual(len(soup.select('#alvina-branch option')), 2)
+
+    def test_csrf_required(self):
+        self.authenticate('alvina-portal-test', 'local-test-only')
+        response = self.url_open('/branch/requisition/submit', data={'branch_id': self.branch.id})
+        self.assertEqual(response.status_code, 400)

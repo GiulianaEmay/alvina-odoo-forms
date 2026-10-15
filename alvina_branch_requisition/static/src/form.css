@@ -1,0 +1,6 @@
+.alvina-requisition { max-width: 1000px; }
+.alvina-requisition h1, .alvina-requisition th { color: #721c35; }
+.alvina-requisition label { display: block; margin-top: 1rem; font-weight: 600; }
+.alvina-requisition .btn-primary { background: #721c35; border-color: #721c35; }
+.alvina-requisition .table { margin-top: 1.5rem; }
+.alvina-requisition td:last-child { width: 180px; }

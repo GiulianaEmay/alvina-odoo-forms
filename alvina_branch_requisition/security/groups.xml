@@ -1,0 +1,14 @@
+<?xml version="1.0" ?>
+<odoo>
+    <record id="group_requester" model="res.groups">
+        <field name="name">Alviña: Solicitante</field>
+    </record>
+    <record id="group_keeper" model="res.groups">
+        <field name="name">Alviña: Almacenero</field>
+        <field name="implied_ids" eval="[(4, ref('group_requester')), (4, ref('stock.group_stock_user')), (4, ref('purchase.group_purchase_user'))]"/>
+    </record>
+    <record id="group_admin" model="res.groups">
+        <field name="name">Alviña: Configuración</field>
+        <field name="implied_ids" eval="[(4, ref('group_keeper'))]"/>
+    </record>
+</odoo>
