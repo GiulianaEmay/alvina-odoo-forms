@@ -29,7 +29,7 @@
                         <field name="generate_purchase_rfq" />
                         <field name="purchase_picking_type_id"
                                domain="[('code', '=', 'incoming'), ('company_id', '=', company_id)]"
-                               invisible="not generate_purchase_rfq" required="generate_purchase_rfq" />
+                               required="generate_purchase_rfq" />
                         <field name="active" />
                     </group>
                 </sheet>
@@ -151,6 +151,7 @@
                             <field name="product_uom_id" />
                             <field name="product_qty" />
                             <field name="free_qty" />
+                            <field name="reserved_qty" />
                             <field name="incoming_qty" />
                             <field name="suggested_qty" />
                         </list>
@@ -198,6 +199,7 @@
     <menuitem id="menu_web" name="Formulario Web" parent="purchase.menu_procurement_management" action="action_web" groups="group_requester" sequence="31" />
     <menuitem id="menu_requests" name="Requerimientos" parent="purchase.menu_procurement_management" action="action_requests" groups="group_requester" sequence="32" />
     <menuitem id="menu_consolidation" name="Consolidado de compras" parent="purchase.menu_procurement_management" action="action_consolidation" groups="group_keeper" sequence="33" />
+    <record id="menu_consolidation" model="ir.ui.menu"><field name="active" eval="True"/></record>
     <record id="product_template_form" model="ir.ui.view">
         <field name="name">alvina.product.template.form</field>
         <field name="model">product.template</field>

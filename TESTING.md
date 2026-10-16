@@ -1,6 +1,67 @@
+# Validación actual — 16 de octubre de 2026 — 19.0.2.0.0
+
+## Resultado comprobado
+
+- **117 pruebas Odoo: 0 fallos, 0 errores, ninguna omitida** en la revisión final. Conserva los 76 casos anteriores y añade 18 de flujo comercial/migración, 15 de atención/Inventario y 8 de PDF. El conteo corresponde a `odoo.tests.result`, no al contador auxiliar que incluye preparación de clases.
+- Instalación inicial limpia, sin demo: **116 casos aprobados** antes de añadir el último caso que bloquea la migración de la variante alternativa. La suite final de 117 se ejecutó con actualización de vistas/campos. Las comprobaciones posteriores solo cambiaron documentación.
+- **6 pruebas Python y 5 de interfaz DOM: aprobadas**, además de compilación, validación XML y `git diff --check`.
+- Chromium real: assets, categorías, cantidades y envío al servidor, sin omitir el caso.
+- PDF binario real con wkhtmltopdf parcheado: generado en la suite y, aparte, desde HTTP autenticado como solicitante portal sin permisos de Ventas/Inventario. Muestra revisada visualmente: una página A4, datos sintéticos, 20 pedidos / 15 entregados / 5 faltantes, valores 70 / 52,50 / 17,50 en la moneda USD de la fixture, sin impuestos de prueba. La unidad muestra el nombre de la UoM configurada; la fixture usa idioma inglés para datos estándar, las etiquetas del informe son españolas.
+- Dos POST HTTP concurrentes con el mismo token: exactamente un requerimiento, una OC y una OV, ambas en borrador. Sin añadir Industria a las compañías del usuario.
+- Escenario real de Inventario: confirmación manual de la OV por el usuario de Industria, salida de 15 y backorder de 5; OC aún en borrador, recibido 0, ninguna factura automática.
+- Actualización real **19.0.1.2.0 (`d59eea3`) → 19.0.2.0.0**: dos históricos preservados, incluido uno con cantidad atendida no nula (1). Sin OC/OV/movimientos nuevos ni activación de configuración central. Probe reproducible en `tools/check_intercompany_upgrade.py`.
+
+Las pruebas cubren precios de lista en vez de precio público, descuentos, impuestos incluidos/excluidos, redondeo global, moneda, rollback atómico, idempotencia, suplantación RPC/defaults, asignaciones, contactos/compañías y recepción protegidos. El guardia nativo se prueba tanto en confirmar como en aprobar compras y confirmar ventas. Ese guardia se simula mediante mocking de presencia del módulo, **no constituye una prueba de Enterprise**.
+
+Inventario distingue reservas, salidas netas y recepciones; cubre 20/15/5, backorders, devoluciones y devoluciones de devoluciones, sobreentrega real, operaciones canceladas, stock físico insuficiente y bienes no almacenables. El cierre de saldo exige motivo, usuario real y operaciones abiertas canceladas; no altera la demanda original. El consolidado reconoce reservas propias una sola vez y conserva indisponibles las de otros pedidos.
+
+## Runtime y evidencia de esta máquina
+
+Odoo oficial Community 19: `e1ed4fe077ba98ce7ac6802a43bb68242081dee9`. Python 3.12.14, PostgreSQL local mediante `pgserver`, rol de pruebas sin superusuario, Chromium real y wkhtmltopdf 0.12.6.1 con Qt parcheado. Dependencias oficiales; localmente se omitió python-ldap y se usó psycopg2-binary. La extensión pg_trgm no está en este PostgreSQL reducido; las pruebas no afirman cubrir índices trigram.
+
+- Suite final: `/tmp/alvina-intercompany-accepted.log`, base `alvina_intercompany_test`.
+- Instalación limpia: `/tmp/alvina-intercompany-install.log`, base `alvina_intercompany_install_test`.
+- Actualización histórica: `/tmp/alvina-flow-upgrade.log`, baseline `/tmp/alvina-flow-upgrade-before.json`, base `alvina_supply_upgrade_test`.
+- HTTP: `/tmp/alvina-flow-http-final.log`; fixture de entrega `/tmp/alvina-flow-smoke-delivery-final.log`, base `alvina_flow_smoke_test`.
+- PDF de muestra: `/workspace/exports/alvina-despacho-ejemplo-pruebas.pdf` (datos de prueba, no documento real).
+
+Estos logs/bases son evidencia temporal y no se suben a Git. El código y los probes reproducibles sí están en el repositorio. GitHub Actions remoto no se ha verificado.
+
+## Reproducir las pruebas
+
+Instalar las dependencias de pruebas siguiendo `.github/workflows/tests.yml` en un entorno aislado, con código Odoo fuera del addon. Para PDF en Linux amd64, `python tools/setup_test_pdf.py` descarga paquetes fijados por SHA256 y extrae solo en `/tmp/alvina-pdf-runtime`, sin instalación del sistema. Exportar:
+
+```bash
+export PATH=/tmp/alvina-pdf-runtime/usr/local/bin:$PATH
+export LD_LIBRARY_PATH=/tmp/alvina-pdf-runtime/usr/lib/x86_64-linux-gnu
+python -m unittest discover -s tools -v
+NODE_PATH=/tmp/alvina-js-test/node_modules node --test tools/test_frontend.cjs
+python /path/to/odoo/odoo-bin --addons-path=/path/to/odoo/addons,/path/to/repository \
+  --db_host=/tmp/alvina-test-pg --db_user=alvina_test \
+  -d alvina_intercompany_test -i alvina_branch_requisition --without-demo \
+  --test-enable --test-tags=/alvina_branch_requisition --stop-after-init \
+  --http-interface=127.0.0.1 --http-port=8093
+```
+
+Utilizar `-u` en vez de `-i` cuando la base desechable ya tenga el addon instalado. Se necesita un wkhtmltopdf funcional y Chromium para no omitir pruebas.
+
+Para la migración: preparar los históricos con la revisión anterior en la base estrictamente local `alvina_supply_upgrade_test`, usando las fixtures documentadas en `tools/check_supply_upgrade.py`. Con 19.0.1.2.0 instalada, capturar el baseline con `python tools/check_intercompany_upgrade.py capture SNAPSHOT.json`; actualizar normalmente a la revisión actual; ejecutar `verify SNAPSHOT.json`. El probe solo lee la base local indicada. La prueba de esta sesión incluyó una cantidad atendida 1 insertada únicamente en su fixture SQL antes del baseline. Un subtotal histórico sin precio puede pasar de NULL a cero por recomputación de Odoo; se comprueba que siga sin precio capturado y no se interprete como valoración histórica.
+
+Para HTTP concurrente: en una base local **nueva y desechable** `alvina_flow_smoke_test` con el addon instalado y socket `/tmp/alvina-test-pg`, ejecutar Odoo shell con `ALVINA_FLOW_SMOKE_PHASE=seed` y stdin `tools/flow_smoke_fixture.py`. Arrancar solo esa base en `127.0.0.1:8094` sin cron. Ejecutar `python tools/check_flow_http.py submit`; después Odoo shell con fase `deliver`; finalmente `python tools/check_flow_http.py pdf`. La fixture crea datos sintéticos y hace commit, rechaza bases/conexiones diferentes y no se debe ejecutar en datos operativos. El PDF se exporta a `/workspace/exports/`.
+
+## Límites que las pruebas no resuelven
+
+No se validaron Enterprise, automatizaciones privadas instaladas, rutas/datos fiscales/tema reales ni regresión ejecutable del formulario de producción privado. El guardia bloquea el automatismo Enterprise conocido y la fabricación privada por LdM; no prueba todos los addons desconocidos. La operación dentro de la misma compañía permanece bloqueada hasta aprobar y mapear su traslado.
+
+La rama alternativa `feature/central-supply-multicompany` (`258a450`) tiene otro esquema aunque comparta número de versión con `d59eea3`. No se fusionó ni se migró su historial. El caso nuevo 117 verifica que su tabla de asignaciones provoca un bloqueo explícito en vez de perder datos. Confirmar el commit efectivamente instalado antes de actualizar.
+
+No se hicieron pruebas ni cambios en producción, ni se concedieron permisos nuevos. Esta revisión no repitió la desinstalación destructiva de versiones anteriores.
+
+## Evidencia histórica — versiones anteriores
+
 # Evidencia de validación — 15 de octubre de 2026
 
-## Resultado actual: 19.0.1.2.0
+## Resultado histórico: 19.0.1.2.0
 
 - **76 pruebas Odoo: 0 fallos, 0 errores.** Las 46 de la entrega multiempresa, 22 de cotizaciones/precios/permisos y 8 de contexto web. Resultado del runner `odoo.tests.result`, sin omitir Chromium real.
 - **6 pruebas Python y 5 pruebas DOM aprobadas.** Compilación Python, XML y `git diff --check` correctos.

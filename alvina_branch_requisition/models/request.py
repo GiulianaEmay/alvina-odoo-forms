@@ -37,6 +37,10 @@ class BranchRequest(models.Model):
             rec.amount_total = sum(rec.line_ids.mapped('price_subtotal'))
             rec.price_snapshot_set = bool(rec.line_ids) and all(rec.line_ids.mapped('price_snapshot_set'))
 
+    def _submission_values(self, branch):
+        """Server-only extension point, after identity and assignment checks."""
+        return {}
+
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
@@ -58,6 +62,7 @@ class BranchRequest(models.Model):
                         supply_company_id=branch.supply_company_id.id, warehouse_id=branch.warehouse_id.id,
                         request_date=fields.Datetime.now(),
                         name=self.env['ir.sequence'].sudo().next_by_code('alvina.branch.request'))
+            vals.update(self._submission_values(branch))
         token = _CREATING.set(True)
         try:
             clean_context = {key: value for key, value in self.env.context.items()
@@ -130,6 +135,13 @@ class RequestLine(models.Model):
         for line in self:
             line.price_subtotal = line.currency_id.round(line.price_unit * line.product_qty) if line.currency_id else 0
 
+    def _snapshot_price(self, product, request, qty):
+        company = request.company_id
+        sale_product = product.with_context({})
+        return sale_product.currency_id._convert(
+            sale_product.lst_price, company.currency_id, company,
+            fields.Date.to_date(request.request_date), round=False)
+
     @api.model_create_multi
     def create(self, vals_list):
         if not _CREATING.get():
@@ -153,11 +165,7 @@ class RequestLine(models.Model):
             # Capture the actual product sale price (including variant extras),
             # in its source currency. Never substitute the inventory cost or a
             # vendor price. Shared products use the main company's sale currency.
-            company = request.company_id
-            sale_product = product.with_context({})
-            price = sale_product.currency_id._convert(
-                sale_product.lst_price, company.currency_id, company,
-                fields.Date.to_date(request.request_date), round=False)
+            price = self._snapshot_price(product, request, q)
             if not math.isfinite(price) or price < 0:
                 raise ValidationError(_('El producto tiene un precio de venta inválido.'))
             vals.update(price_unit=price, price_snapshot_set=True)

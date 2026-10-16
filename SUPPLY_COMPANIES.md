@@ -1,3 +1,5 @@
+> Documentación del modo anterior 19.0.1.2.0. La nueva corrección funcional y configuración central 19.0.2.0.0 se documentan en [INTERCOMPANY_FLOW.md](INTERCOMPANY_FLOW.md). Con el flujo central activo todas las sucursales usan Industria; la opción heredada por vínculo deja de decidir la generación. Enterprise y las operaciones dentro de la misma compañía siguen pendientes según [NATIVE_INTERCOMPANY.md](NATIVE_INTERCOMPANY.md).
+
 # Industria abastece a las sucursales — versión 19.0.1.2.0
 
 ## Flujo para el usuario

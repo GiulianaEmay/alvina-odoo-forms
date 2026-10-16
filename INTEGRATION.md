@@ -1,3 +1,11 @@
+# Integración actual — 19.0.2.0.0
+
+Consultar [INTERCOMPANY_FLOW.md](INTERCOMPANY_FLOW.md) y [NATIVE_INTERCOMPANY.md](NATIVE_INTERCOMPANY.md) antes de activar esta versión. Se mantienen las referencias verificadas del ZIP descritas abajo. El cliente de la OV nueva es el contacto de la compañía compradora real, separado del contacto operativo de sucursal. Se usa el tránsito estándar entre compañías; no se comparten contactos privados ni se inventan compañías/ubicaciones.
+
+El código Enterprise no está disponible y no se declara compatibilidad con su automatismo. El guardia bloquea `account_inter_company_rules` instalado y los productos con LdM que dispararían la fabricación privada conocida. La operación de compañía compartida sigue pendiente de aprobación/mapeo.
+
+## Referencias y revisión anteriores
+
 # Integración con los módulos existentes de Alviña
 
 ## Procedencia y alcance de la revisión

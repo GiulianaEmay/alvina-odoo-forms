@@ -1,6 +1,34 @@
+# Entrega actual: flujo sucursales → Industria — 19.0.2.0.0
+
+Rama `feature/intercompany-purchase-sales-flow`. Addon técnico bajo **Compras → Órdenes**, sin aplicación ni menú raíz. Conserva formulario, requerimientos, consolidado e historia anteriores y añade OC/OV en borrador, entregas reales y PDF valorizado para compañías distintas.
+
+**Estado: validado en Community; integración Enterprise pendiente.** No activar en producción. El automatismo nativo instalado sin adaptador auditado y las sucursales que comparten compañía con Industria quedan bloqueados expresamente. No se han creado compañías ficticias ni ampliado permisos. No se ha desplegado nada.
+
+Antes de actualizar, identificar el **commit instalado**: también existe `feature/central-supply-multicompany`, con otro esquema y el mismo número de versión anterior. Se conserva intacta; migrar desde ella requiere un mapeo específico y la actualización se bloquea si detecta su tabla de asignaciones.
+
+- [Configuración, comportamiento, seguridad, precios y límites actuales](INTERCOMPANY_FLOW.md).
+- [Auditoría nativa/privada y datos necesarios para completar la integración](NATIVE_INTERCOMPANY.md).
+- [Pruebas y evidencias](TESTING.md).
+- [Traspaso a otra cuenta](TRANSFER.md).
+
+Dependencias actuales: `purchase`, `stock`, `purchase_stock`, `sale_management`, `sale_stock`, `portal`, `website`. Copiar **solo la carpeta completa `alvina_branch_requisition/`** a la raíz de addons del repositorio operativo, al mismo nivel que sus otros addons; no anidar el repositorio entero dentro del addon. Usar primero una copia de pruebas respaldada. El código, documentación y herramientas de pruebas del repositorio de desarrollo se conservan para revisión.
+
+En pruebas, con el servicio de esa base detenido, ejecutar con el Python y configuración reales de Odoo 19:
+
+```bash
+/path/to/odoo/odoo-bin -c /path/to/test.conf -d ALVINA_TEST \
+  -u alvina_branch_requisition --stop-after-init
+```
+
+Para una instalación nueva usar `-i` en lugar de `-u`. Conservar todas las carpetas `migrations/`; reiniciar no actualiza campos/vistas/migraciones y desinstalar elimina datos propios. La configuración central nace desactivada y no genera documentos históricos. No activar el nuevo flujo hasta resolver los límites anteriores.
+
+## Documentación histórica del modo anterior — 19.0.1.2.0
+
+Las siguientes secciones describen el modo anterior, conservado mientras la configuración central nueva esté desactivada. Para el flujo actual prevalece `INTERCOMPANY_FLOW.md`; las afirmaciones históricas de que aún no existen ventas/entregas/PDF no describen la nueva implementación.
+
 # Alviña — Requerimientos de sucursales
 
-Addon técnico `alvina_branch_requisition`, versión actual `19.0.1.2.0` para Odoo 19. No crea una aplicación: `application=False`, sin menú raíz ni icono. Depende de `purchase`, `stock`, `purchase_stock`, `portal`, `website` (y sus dependencias transitivas). No requiere bibliotecas frontend externas.
+Addon técnico `alvina_branch_requisition`, versión histórica `19.0.1.2.0` para Odoo 19. No crea una aplicación: `application=False`, sin menú raíz ni icono. Depende de `purchase`, `stock`, `purchase_stock`, `portal`, `website` (y sus dependencias transitivas). No requiere bibliotecas frontend externas.
 
 ## Menús y aislamiento
 

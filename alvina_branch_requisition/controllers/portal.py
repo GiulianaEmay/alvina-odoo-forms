@@ -36,10 +36,14 @@ class RequisitionPortal(http.Controller):
             ('active', '=', True), ('product_tmpl_id.active', '=', True),
             ('alvina_requisition_enabled', '=', True), ('categ_id.name', 'in', CATEGORIES),
             ('company_id', 'in', [False, company.id])]
-        if branch and branch.generate_purchase_rfq:
+        configuration = request.env['alvina.supply.configuration']._get_configuration()
+        uniform_flow = configuration and configuration.enabled
+        if branch and (branch.generate_purchase_rfq or uniform_flow):
             # A standard purchase in the requesting company cannot reference a
             # product private to the supplier. No product ownership is changed.
             domain += [('company_id', '=', False), ('purchase_ok', '=', True)]
+        if uniform_flow:
+            domain += [('sale_ok', '=', True), ('type', '=', 'consu')]
         return request.env['product.product'].sudo().search(domain)
 
     def _render(self, error=None):

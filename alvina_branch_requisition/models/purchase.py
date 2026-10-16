@@ -22,7 +22,9 @@ class BranchRequestPurchase(models.Model):
     def create(self, vals_list):
         records = super().create(vals_list)
         for rec in records:
-            if rec.branch_id.generate_purchase_rfq:
+            if rec.supply_flow:
+                rec._create_supply_documents()
+            elif rec.branch_id.generate_purchase_rfq:
                 rec._create_purchase_rfq()
         return records
 

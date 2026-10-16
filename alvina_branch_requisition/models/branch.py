@@ -79,9 +79,16 @@ class BranchBinding(models.Model):
                     continue
                 if user.has_group('alvina_branch_requisition.group_keeper') and rec.supply_company_id in user.company_ids:
                     continue
+                if user.has_group('sales_team.group_sale_salesman') and rec.supply_company_id in user.company_ids:
+                    continue
                 raise ValidationError(_('El solicitante debe tener acceso a la empresa solicitante; el almacenero, a la solicitante o abastecedora.'))
 
     def write(self, vals):
+        if 'purchase_picking_type_id' in vals:
+            changed = self.filtered(lambda branch: branch.purchase_picking_type_id.id != vals['purchase_picking_type_id'])
+            if changed and self.env['alvina.branch.request'].sudo().search_count([
+                    ('branch_id', 'in', changed.ids), ('supply_flow', '=', True)]):
+                raise ValidationError(_('Cambiar la recepción de una sucursal con historial del flujo Industria requiere una migración controlada.'))
         if set(vals) & {'resource_ref', 'company_id', 'supply_company_id', 'warehouse_id'}:
             if self.env['alvina.branch.request'].sudo().search_count([('branch_id', 'in', self.ids)]):
                 raise ValidationError(_('Cambiar una sucursal o almacén con historial requiere una migración controlada.'))

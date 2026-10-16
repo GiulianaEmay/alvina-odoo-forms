@@ -1,3 +1,17 @@
+# Continuación actual para traspaso — 19.0.2.0.0
+
+La rama de esta entrega es `feature/intercompany-purchase-sales-flow`, basada en `feature/multi-company-supply` (`d59eea3`). Las ramas anteriores no se fusionan ni sobrescriben.
+
+Existe además `feature/central-supply-multicompany` en `258a450`, basada en `bf19163`: es una variante diferente y se conserva intacta. Identificar el commit que está instalado; la misma versión 19.0.1.2.0 no distingue las dos variantes. El guardia de migración impide perder sus asignaciones de almaceneros sin un mapeo revisado.
+
+Leer primero `INTERCOMPANY_FLOW.md`, `NATIVE_INTERCOMPANY.md` y el resultado actual en `TESTING.md`. Conservan decisiones y pendientes: dos borradores atómicos para compañías distintas, lista de precios configurada, seguridad sin nuevas membresías, entregas/recepciones separadas, cierres de saldo auditados, consolidado con reservas propias una sola vez y PDF real. La migración conserva cantidades atendidas antiguas. La configuración central no se activa automáticamente.
+
+Falta obtener el código/configuración Enterprise nativos y validar un adaptador; también aprobar y mapear la variante de traslado interno para sucursales que comparten compañía con Industria. Ambas operaciones quedan bloqueadas. No retirar esos bloqueos para simular compatibilidad. `alvinha_mrp` con LdM también requiere integración verificada.
+
+No se modificó producción ni `SoyCalidad/alvinha`. Las bases desechables, el runtime Odoo/Enterprise y los archivos de `/tmp` no viajan por Git. El código y los probes sí; el PDF de muestra usa datos sintéticos y se entrega como artefacto aparte. No incluye credenciales reales.
+
+## Historial de la entrega anterior
+
 # Traspaso del desarrollo multiempresa
 
 Este documento conserva el estado de la entrega `19.0.1.1.0` y, al final, la continuación autorizada para `19.0.1.2.0`. Las restricciones y resultados de cada bloque corresponden a ese momento; la versión y las pruebas actuales se consultan en el bloque de continuación y en `TESTING.md`.
