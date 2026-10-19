@@ -19,6 +19,15 @@ también login HTTP 200, autenticación local y backend `/odoo` autenticado HTTP
 200. El servidor local se detuvo al terminar; no se generaron documentos y el
 flujo central quedó desactivado.
 
+Tras recibir el segundo error real (`UndefinedColumn`), se reprodujo también
+con una base 19.0.1.2.0 de `d59eea3`, una venta previa y código nuevo sin aplicar
+la actualización del addon. La lectura falló con la misma columna ausente.
+Ejecutar únicamente `-u alvina_branch_requisition` en esa misma base terminó con
+código 0, creó la columna y permitió leer la venta conservando sus datos y sin
+documentos adicionales. No se desinstaló ni borró la base. Evidencia temporal:
+`/tmp/alvina-incident-upgrade-result.json`. Esta comprobación no cubre Enterprise,
+producción ni la variante alternativa `258a450`.
+
 ## Resultado comprobado
 
 - **117 pruebas Odoo: 0 fallos, 0 errores, ninguna omitida** en la revisión final. Conserva los 76 casos anteriores y añade 18 de flujo comercial/migración, 15 de atención/Inventario y 8 de PDF. El conteo corresponde a `odoo.tests.result`, no al contador auxiliar que incluye preparación de clases.
