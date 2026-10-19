@@ -9,6 +9,16 @@ contra `779f46d` fue idéntica. No cambió la lógica del addon ni se repitió l
 Odoo durante este incidente; los 117 casos siguientes son evidencia anterior.
 Véase [RECOVERY_2026-10-19.md](RECOVERY_2026-10-19.md).
 
+Además, se reprodujo el arranque con Odoo 19 oficial y PostgreSQL local en una
+base desechable nueva: el ZIP incorrecto terminó con código 255 por la relación
+`sale_line_ids` cuyo inverso no existía en `sale.order.line`. Reemplazar únicamente
+`commercial.py` y repetir sobre la misma base, sin borrarla, terminó con código
+0 y registro/vistas/seguridad/reportes cargados. Es una prueba dirigida de
+arranque/recuperación, separada de la suite completa histórica. Se verificaron
+también login HTTP 200, autenticación local y backend `/odoo` autenticado HTTP
+200. El servidor local se detuvo al terminar; no se generaron documentos y el
+flujo central quedó desactivado.
+
 ## Resultado comprobado
 
 - **117 pruebas Odoo: 0 fallos, 0 errores, ninguna omitida** en la revisión final. Conserva los 76 casos anteriores y añade 18 de flujo comercial/migración, 15 de atención/Inventario y 8 de PDF. El conteo corresponde a `odoo.tests.result`, no al contador auxiliar que incluye preparación de clases.
