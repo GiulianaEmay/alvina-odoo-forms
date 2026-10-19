@@ -1,5 +1,14 @@
 # Validación actual — 16 de octubre de 2026 — 19.0.2.0.0
 
+## Recuperación del 19 de octubre de 2026
+
+Se aprobaron **9 pruebas Python**, compilación y comprobación de diferencias.
+El preflight nuevo detectó el `commercial.py` sustituido en el ZIP operativo,
+rechazándolo; pasó con el addon restaurado. La comparación de sus 41 archivos
+contra `779f46d` fue idéntica. No cambió la lógica del addon ni se repitió la suite
+Odoo durante este incidente; los 117 casos siguientes son evidencia anterior.
+Véase [RECOVERY_2026-10-19.md](RECOVERY_2026-10-19.md).
+
 ## Resultado comprobado
 
 - **117 pruebas Odoo: 0 fallos, 0 errores, ninguna omitida** en la revisión final. Conserva los 76 casos anteriores y añade 18 de flujo comercial/migración, 15 de atención/Inventario y 8 de PDF. El conteo corresponde a `odoo.tests.result`, no al contador auxiliar que incluye preparación de clases.

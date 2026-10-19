@@ -1,5 +1,10 @@
 # Entrega actual: flujo sucursales → Industria — 19.0.2.0.0
 
+> Recuperación del incidente del 19/10/2026: rama `fix/requisition-startup-recovery`.
+> El ZIP operativo tenía `models/commercial.py` sustituido por una copia de `branch.py`.
+> Esta rama conserva el archivo correcto. Véase [diagnóstico y recuperación](RECOVERY_2026-10-19.md).
+> Antes de transferir el addon, ejecutar `python tools/check_addon_package.py`.
+
 Rama `feature/intercompany-purchase-sales-flow`. Addon técnico bajo **Compras → Órdenes**, sin aplicación ni menú raíz. Conserva formulario, requerimientos, consolidado e historia anteriores y añade OC/OV en borrador, entregas reales y PDF valorizado para compañías distintas.
 
 **Estado: validado en Community; integración Enterprise pendiente.** No activar en producción. El automatismo nativo instalado sin adaptador auditado y las sucursales que comparten compañía con Industria quedan bloqueados expresamente. No se han creado compañías ficticias ni ampliado permisos. No se ha desplegado nada.
