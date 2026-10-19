@@ -1,3 +1,11 @@
+# Integración actual — 19.0.2.0.0
+
+Consultar [INTERCOMPANY_FLOW.md](INTERCOMPANY_FLOW.md) y [NATIVE_INTERCOMPANY.md](NATIVE_INTERCOMPANY.md) antes de activar esta versión. Se mantienen las referencias verificadas del ZIP descritas abajo. El cliente de la OV nueva es el contacto de la compañía compradora real, separado del contacto operativo de sucursal. Se usa el tránsito estándar entre compañías; no se comparten contactos privados ni se inventan compañías/ubicaciones.
+
+El código Enterprise no está disponible y no se declara compatibilidad con su automatismo. El guardia bloquea `account_inter_company_rules` instalado y los productos con LdM que dispararían la fabricación privada conocida. La operación de compañía compartida sigue pendiente de aprobación/mapeo.
+
+## Referencias y revisión anteriores
+
 # Integración con los módulos existentes de Alviña
 
 ## Procedencia y alcance de la revisión
@@ -89,7 +97,7 @@ Ese addon ya existe en el ZIP y es distinto del nuevo desarrollo:
 | --- | --- | --- |
 | Objeto principal | `alvina.stock.request`, `models/request.py:16` | `alvina.branch.request` |
 | Destino | `alvina.stock.department`, `models/department.py:6` | Vínculo con la sucursal real |
-| Función | Solicitudes de insumos, credenciales QR/Code128 y entrega autorizada mediante traslado interno | Formulario de sucursales y necesidades pendientes de compra; sin generar compras o traslados |
+| Función | Solicitudes de insumos, credenciales QR/Code128 y entrega autorizada mediante traslado interno | Formulario de sucursales y consolidado; desde 19.0.1.2.0 puede crear cotizaciones en borrador si se habilita por vínculo, sin confirmar compras ni generar traslados |
 | Navegación | Aplicación raíz propia, `views/menus.xml:2`, `application=True` en `__manifest__.py:28` | Submenús de Compras, sin aplicación raíz |
 | Almacén | Código `INS` y rutas específicas validadas en `models/department.py:21` | Almacén abastecedor configurado por vínculo, sin asumir un código global |
 
@@ -188,3 +196,9 @@ El formulario, permisos y consolidado están probados en Community; no se certif
 El almacén de un vínculo con historial no se puede reasignar. La unicidad del contacto también impide archivar y crear un segundo vínculo del mismo contacto: un cambio de almacén con historial requiere diseñar una migración o versionado, no duplicar contactos ni borrar solicitudes.
 
 La autorización actual permite subir las correcciones únicamente a `GiulianaEmay/alvina-odoo-forms`. El usuario trasladará después la carpeta del addon al repositorio compartido; no se realizó escritura en `SoyCalidad/alvinha` ni se confirmó el destino de despliegue de `cybe`.
+
+## Abastecimiento central confirmado después de la inspección
+
+El usuario confirmó que Industria Panificadora Alviña abastece/vende a las demás sucursales, que pueden figurar en Odoo como compañías diferentes. Desde `19.0.1.1.0` el núcleo distingue empresa solicitante (`company_id`) de empresa abastecedora (`supply_company_id`) y almacén. El usuario de UPAO no necesita acceso general a Industria. Un almacenero de Industria asignado a UPAO puede revisar sus requerimientos sin recibir acceso general a documentos de la compañía UPAO.
+
+La propiedad del contacto puede corresponder a una u otra compañía, o estar compartida: no se infiere la compañía solicitante desde el contacto ni desde su nombre. El administrador configura ambas empresas explícitamente. El consolidado agrupa por producto, almacén y empresa abastecedora antes de descontar stock, sin duplicar el stock de Industria por cada compañía solicitante. Ver [SUPPLY_COMPANIES.md](SUPPLY_COMPANIES.md) para configuración, límites y actualización probada. La venta/factura/entrega por el flujo habitual sigue fuera de este registro informativo.

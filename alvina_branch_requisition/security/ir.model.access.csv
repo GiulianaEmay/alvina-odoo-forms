@@ -6,3 +6,5 @@ request_keeper,request keeper,model_alvina_branch_request,group_keeper,1,1,1,0
 line_requester,line requester,model_alvina_branch_request_line,group_requester,1,0,1,0
 consolidation_keeper,consolidation keeper,model_alvina_branch_consolidation,group_keeper,1,1,1,1
 consolidation_line_keeper,consolidation line keeper,model_alvina_branch_consolidation_line,group_keeper,1,1,1,1
+configuration_admin,central supply configuration,model_alvina_supply_configuration,group_admin,1,1,1,0
+balance_cancellation_keeper,balance cancellation keeper,model_alvina_branch_balance_cancellation,group_keeper,1,0,1,0
