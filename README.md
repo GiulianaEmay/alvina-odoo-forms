@@ -16,6 +16,7 @@ anteriores. Publicar esta rama en GitHub no instala ni actualiza Odoo.
 - [Compatibilidad Enterprise, módulos privados y bloqueos](NATIVE_INTERCOMPANY.md).
 - [Validación y reproducción de pruebas](TESTING.md).
 - [Recuperación del incidente del 19/10/2026](RECOVERY_2026-10-19.md).
+- [Recuperación de Ventas y manifiesto incompleto del 22/10/2026](RECOVERY_2026-10-22.md).
 - [Antecedentes del traspaso](TRANSFER.md).
 
 Los documentos históricos `SUPPLY_COMPANIES.md`, `INTEGRATION.md` y `TRANSFER.md`

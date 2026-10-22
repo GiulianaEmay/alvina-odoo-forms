@@ -116,6 +116,56 @@ class AddonPackageTests(unittest.TestCase):
         self._replace('models/__init__.py', 'from . import dispatch', '')
         self.assertEqual(check_package(self.addon), [])
 
+    def test_old_manifest_cannot_disable_checks_for_loaded_version_three_sources(self):
+        manifest = self._manifest()
+        manifest['version'] = '19.0.1.0.1'
+        manifest['depends'] = ['purchase', 'stock', 'purchase_stock', 'portal', 'website']
+        manifest['data'] = ['security/groups.xml', 'security/ir.model.access.csv',
+                            'security/rules.xml', 'data/sequence.xml',
+                            'views/backend.xml', 'views/templates.xml']
+        (self.addon / '__manifest__.py').write_text(repr(manifest), encoding='utf-8')
+        errors = check_package(self.addon)
+        self.assertTrue(any('manifest antiguo' in error for error in errors), errors)
+        for dependency in ('sale_management', 'sale_stock'):
+            self.assertTrue(any('Dependencia necesaria ausente: ' + dependency == error
+                                for error in errors), errors)
+        for filename in ('security/commercial_rules.xml', 'security/dispatch_security.xml',
+                         'views/logistics_views.xml', 'views/dispatch_views.xml',
+                         'report/dispatch_note_templates.xml'):
+            self.assertTrue(any('no cargado' in error and filename in error
+                                for error in errors), errors)
+
+    def test_version_two_manifest_with_loaded_version_three_models_is_rejected(self):
+        manifest = self._manifest()
+        manifest['version'] = '19.0.2.0.0'
+        (self.addon / '__manifest__.py').write_text(repr(manifest), encoding='utf-8')
+        errors = check_package(self.addon)
+        self.assertTrue(any('manifest antiguo' in error for error in errors), errors)
+
+    def test_version_three_requires_both_sales_dependencies(self):
+        for dependency in ('sale_management', 'sale_stock'):
+            with self.subTest(dependency=dependency):
+                manifest = self._manifest()
+                manifest['depends'].remove(dependency)
+                (self.addon / '__manifest__.py').write_text(repr(manifest), encoding='utf-8')
+                errors = check_package(self.addon)
+                self.assertIn('Dependencia necesaria ausente: ' + dependency, errors)
+                manifest['depends'].append(dependency)
+                (self.addon / '__manifest__.py').write_text(repr(manifest), encoding='utf-8')
+
+    def test_version_three_also_requires_its_base_supply_views_and_report(self):
+        for filename in ('views/supply_configuration.xml', 'views/commercial_views.xml',
+                         'views/fulfillment_views.xml', 'report/dispatch_templates.xml'):
+            with self.subTest(filename=filename):
+                manifest = self._manifest()
+                manifest['data'].remove(filename)
+                (self.addon / '__manifest__.py').write_text(repr(manifest), encoding='utf-8')
+                errors = check_package(self.addon)
+                self.assertTrue(any('no cargado' in error and filename in error
+                                    for error in errors), errors)
+                manifest['data'].append(filename)
+                (self.addon / '__manifest__.py').write_text(repr(manifest), encoding='utf-8')
+
 
 if __name__ == '__main__':
     unittest.main()

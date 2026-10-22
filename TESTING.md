@@ -8,7 +8,7 @@ Las comprobaciones utilizan Odoo **Community 19** oficial, revisión
 Enterprise ni de la pila privada instalada de Alviña.
 
 Resultado final de esta revisión: **176 pruebas Odoo, cero fallos, cero errores
-y ninguna omisión**, más **21 pruebas Python** de validación/paquete y **5 DOM**.
+y ninguna omisión**, más **25 pruebas Python** de validación/paquete y **5 DOM**.
 Se verificaron también instalación limpia, reinicio, actualización real desde
 19.0.2.0.0 y el escenario HTTP/PDF descrito abajo. Los conteos de 117 pruebas de
 las secciones históricas corresponden a 19.0.2.0.0. No se suman ejecuciones

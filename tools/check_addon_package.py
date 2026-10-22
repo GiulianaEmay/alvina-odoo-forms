@@ -66,12 +66,29 @@ V3_XML_LINKS = {
         'rule_dispatch_scope': ('ir.rule', {'model_id': ('ref', 'model_alvina_branch_dispatch')}),
         'rule_dispatch_line_scope': ('ir.rule', {'model_id': ('ref', 'model_alvina_branch_dispatch_line')}),
     },
+    'views/supply_configuration.xml': {
+        'action_supply_configuration': ('ir.actions.act_window', {'res_model': ('text', 'alvina.supply.configuration')}),
+    },
+    'views/commercial_views.xml': {
+        'sale_order_supply_form': ('ir.ui.view', {'model': ('text', 'sale.order')}),
+        'purchase_order_supply_form': ('ir.ui.view', {'model': ('text', 'purchase.order')}),
+    },
+    'views/fulfillment_views.xml': {
+        'view_picking_form_alvina_dispatch_notes': ('ir.ui.view', {'model': ('text', 'stock.picking')}),
+    },
     'views/logistics_views.xml': {
         'action_logistics_branch_sales': ('ir.actions.act_window', {'res_model': ('text', 'sale.order')}),
     },
     'views/dispatch_views.xml': {
         'action_dispatch_notes': ('ir.actions.act_window', {'res_model': ('text', 'alvina.branch.dispatch')}),
         'view_dispatch_receipt_form': ('ir.ui.view', {'model': ('text', 'alvina.branch.dispatch.receipt')}),
+    },
+    'report/dispatch_templates.xml': {
+        'paperformat_dispatch': ('report.paperformat', {}),
+        'action_dispatch_request_report': ('ir.actions.report', {
+            'model': ('text', 'alvina.branch.request'),
+            'report_name': ('text', 'alvina_branch_requisition.dispatch_request'),
+        }),
     },
     'report/dispatch_note_templates.xml': {
         'action_dispatch_note_report': ('ir.actions.report', {
@@ -158,7 +175,19 @@ def check_package(addon):
         version = tuple(int(part) for part in str(manifest.get('version', '')).split('.'))
     except ValueError:
         version = ()
-    if version >= (19, 0, 3):
+    # A stale manifest must not disable the checks for the Python it actually
+    # loads. The deployed incident mixed the complete v3 sources with a v1
+    # manifest, leaving the new security/views unregistered during update.
+    v3_source = bool({'logistics', 'dispatch'} & set(imported)) or any(
+        key in field_calls for key in (
+            ('stock.picking', 'alvina_dispatch_id'),
+            ('sale.report', 'alvina_sale_order_id'),
+        )) or 'alvina.branch.dispatch' in fields_by_model
+    if v3_source and version < (19, 0, 3):
+        errors.append(
+            'Código de versión 3 cargado con manifest antiguo: declare versión '
+            '19.0.3.0.0 o posterior y sus dependencias/XML completos.')
+    if v3_source or version >= (19, 0, 3):
         for module in ('logistics', 'dispatch'):
             if module not in imported:
                 errors.append('models/__init__.py no importa el módulo obligatorio de versión 3: ' + module)

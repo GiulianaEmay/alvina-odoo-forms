@@ -95,6 +95,26 @@ lotes o números de serie requieren una integración de sus identificadores real
 el asistente los bloquea y no los inventa. Conservar los saldos de entradas y
 salidas parciales es requisito de configuración.
 
+## Módulo de solicitudes internas con QR
+
+El ZIP operativo recibido el 22/10/2026 incorpora `alvina_stock_request`, distinto
+del addon de sucursales. Su `models/stock.py` declara
+`stock.move.alvina_request_line_id` como relación a `alvina.stock.request.line`.
+Este addon declara el mismo nombre de campo como relación a
+`alvina.branch.request.line` en `models/fulfillment.py`.
+
+Si ambos módulos están instalados, no se pueden tratar sus líneas como si fueran
+el mismo modelo. Hay riesgo de sobrescritura de la definición por orden de carga,
+relaciones/validaciones incompatibles y bloqueo de operaciones QR o de sucursales.
+No se ha resuelto ni migrado esa coexistencia en 19.0.3.0.0. Se necesita separar
+los nombres y revisar el esquema y datos reales antes de una migración; no
+reasignar claves ni borrar movimientos para evitar el conflicto.
+
+Este hallazgo no es la causa del `UndefinedColumn` de `stock.picking` reportado.
+La recuperación del esquema de Ventas y la compatibilidad de ambos módulos son
+comprobaciones diferentes. No habilitar ambos flujos como si esa integración
+estuviera certificada.
+
 ## Variante anterior con esquema diferente
 
 La revisión remota encontró `feature/central-supply-multicompany` en
