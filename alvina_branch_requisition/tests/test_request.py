@@ -1,7 +1,11 @@
 from uuid import uuid4
+from datetime import date, datetime, timedelta
+from unittest.mock import patch
 from odoo import Command, fields
 from odoo.tests import TransactionCase, tagged
 from odoo.exceptions import AccessError, ValidationError
+
+from ..models.dates import minimum_required_date
 
 @tagged('post_install', '-at_install')
 class TestRequisition(TransactionCase):
@@ -26,7 +30,7 @@ class TestRequisition(TransactionCase):
             'categ_id': cls.category.id, 'is_storable': True, 'alvina_requisition_enabled': True})
 
     def create_request(self, **extra):
-        vals = {'branch_id': self.branch.id, 'required_date': fields.Date.today(),
+        vals = {'branch_id': self.branch.id, 'required_date': minimum_required_date(fields.Datetime.now()),
             'submission_key': str(uuid4()), 'line_ids': [Command.create({
                 'product_id': self.product.id, 'product_qty': 5})]}
         vals.update(extra)
@@ -37,6 +41,55 @@ class TestRequisition(TransactionCase):
         self.assertEqual(rec.state, 'pending')
         self.assertEqual(rec.line_ids.qty_pending, 5)
         self.assertFalse(self.env['purchase.order'].search([('origin', '=', rec.name)]))
+
+    def test_required_date_uses_two_peru_calendar_days_and_accepts_later_dates(self):
+        # UTC is already the 22nd, while Peru is still on the 21st.
+        with patch.object(fields.Datetime, 'now', return_value=datetime(2026, 10, 22, 0, 30)):
+            minimum = date(2026, 10, 23)
+            for invalid in (minimum - timedelta(days=3), minimum - timedelta(days=2),
+                            minimum - timedelta(days=1)):
+                with self.subTest(required_date=invalid):
+                    with self.assertRaisesRegex(ValidationError, 'dos días calendario'), self.cr.savepoint():
+                        self.create_request(required_date=invalid)
+            for allowed in (minimum, minimum + timedelta(days=1), minimum + timedelta(days=30)):
+                with self.subTest(required_date=allowed):
+                    self.assertEqual(self.create_request(required_date=allowed).required_date, allowed)
+
+    def test_required_date_server_default_cannot_be_changed_by_client_timezone(self):
+        with patch.object(fields.Datetime, 'now', return_value=datetime(2026, 10, 22, 0, 30)):
+            for timezone in ('Pacific/Kiritimati', 'Pacific/Honolulu', 'America/Lima'):
+                with self.subTest(timezone=timezone):
+                    request = self.env['alvina.branch.request'].with_user(self.user).with_context(
+                        tz=timezone, default_required_date='2000-01-01').create({
+                            'branch_id': self.branch.id, 'submission_key': str(uuid4()),
+                            'line_ids': [Command.create({
+                                'product_id': self.product.id, 'product_qty': 1,
+                            })],
+                        })
+                    self.assertEqual(request.required_date, date(2026, 10, 23))
+
+    def test_opposite_client_timezones_cannot_lower_the_peru_minimum(self):
+        with patch.object(fields.Datetime, 'now', return_value=datetime(2026, 10, 22, 5, 30)):
+            for timezone in ('Pacific/Kiritimati', 'Pacific/Honolulu'):
+                with self.subTest(timezone=timezone):
+                    with self.assertRaises(ValidationError), self.cr.savepoint():
+                        self.env['alvina.branch.request'].with_user(self.user).with_context(
+                            tz=timezone, default_required_date='2099-01-01').create({
+                                'branch_id': self.branch.id, 'required_date': '2026-10-23',
+                                'submission_key': str(uuid4()),
+                                'line_ids': [Command.create({
+                                    'product_id': self.product.id, 'product_qty': 1,
+                                })],
+                            })
+
+    def test_historical_required_date_is_not_revalidated_by_unrelated_review(self):
+        self.user.group_ids = [Command.link(self.env.ref('alvina_branch_requisition.group_keeper').id)]
+        with patch.object(fields.Datetime, 'now', return_value=datetime(2026, 10, 22, 0, 30)):
+            request = self.create_request()
+        with patch.object(fields.Datetime, 'now', return_value=datetime(2026, 11, 22, 0, 30)):
+            request.action_review()
+        self.assertEqual(request.required_date, date(2026, 10, 23))
+        self.assertEqual(request.state, 'review')
 
     def test_no_branch_assignment(self):
         self.branch.user_ids = [Command.clear()]

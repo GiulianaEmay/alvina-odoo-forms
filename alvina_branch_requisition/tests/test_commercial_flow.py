@@ -1,6 +1,7 @@
 from unittest.mock import patch
 from uuid import uuid4
 import runpy
+from datetime import timedelta
 
 from psycopg2 import IntegrityError
 from odoo import Command, fields
@@ -17,6 +18,7 @@ class TestCommercialFlow(SupplyCompanyFixture, TransactionCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.supply_company.account_fiscal_country_id = cls.env.ref('base.pe')
+        cls.branch_company.account_fiscal_country_id = cls.env.ref('base.pe')
         cls.keeper.group_ids = [Command.link(cls.env.ref('sales_team.group_sale_salesman').id)]
         cls.branch.resource_ref.company_id = False
         cls.supply_company.partner_id.company_id = False
@@ -39,6 +41,8 @@ class TestCommercialFlow(SupplyCompanyFixture, TransactionCase):
             'pricelist_id': cls.pricelist.id, 'enabled': True})
 
     def _flow(self, **values):
+        values.setdefault('required_date', fields.Date.context_today(
+            self.env['alvina.branch.request'].with_context(tz='America/Lima')) + timedelta(days=2))
         return self._request(product=self.shared_product, quantity=20, **values)
 
     def test_uniform_documents_without_legacy_branch_opt_in(self):
@@ -47,7 +51,7 @@ class TestCommercialFlow(SupplyCompanyFixture, TransactionCase):
         sale, purchase = record.sudo().sale_order_id, record.sudo().purchase_order_id
         self.assertTrue(record.supply_flow)
         self.assertEqual(record.operation_mode, 'intercompany')
-        self.assertEqual((sale.state, purchase.state), ('draft', 'draft'))
+        self.assertEqual((sale.state, purchase.state), ('sale', 'purchase'))
         self.assertEqual(sale.company_id, self.supply_company)
         self.assertEqual(purchase.company_id, self.branch_company)
         self.assertEqual(sale.partner_id, self.branch_company.partner_id)
@@ -58,7 +62,12 @@ class TestCommercialFlow(SupplyCompanyFixture, TransactionCase):
         self.assertEqual(purchase.order_line.alvina_request_line_id, record.line_ids)
         self.assertEqual(sale.alvina_purchase_order_id, purchase)
         self.assertEqual(purchase.alvina_sale_order_id, sale)
-        self.assertFalse(sale.picking_ids | purchase.picking_ids)
+        self.assertTrue(sale.picking_ids)
+        self.assertTrue(purchase.picking_ids)
+        self.assertTrue(all(picking.state not in ('done', 'cancel')
+                            for picking in sale.picking_ids | purchase.picking_ids))
+        self.assertEqual(record.line_ids.qty_supplied, 0)
+        self.assertEqual(record.line_ids.qty_received, 0)
         self.assertFalse(sale.invoice_ids | purchase.invoice_ids)
 
     def test_upgrade_refuses_the_alternative_branch_schema_without_mapping(self):
@@ -156,8 +165,15 @@ class TestCommercialFlow(SupplyCompanyFixture, TransactionCase):
                 self._flow()
 
     def test_native_guard_covers_both_purchase_confirmation_paths(self):
-        record = self._flow()
+        # Build the old draft stage only for this guard regression. Reach
+        # 'to approve' through core's real two-step confirmation, not a state
+        # assignment, before simulating the newly enabled native module.
+        with patch.object(type(self.env['alvina.branch.request']), '_confirm_supply_documents', return_value=None):
+            record = self._flow()
         purchase = record.sudo().purchase_order_id
+        self.branch_company.write({'po_double_validation': 'two_step', 'po_double_validation_amount': 0})
+        purchase.button_confirm()
+        self.assertEqual(purchase.state, 'to approve')
         # Simulate enabling the native module after the pair was created. Do
         # not install an Enterprise placeholder or guess its confirmation hook.
         Module = type(self.env['ir.module.module'])
@@ -171,8 +187,7 @@ class TestCommercialFlow(SupplyCompanyFixture, TransactionCase):
         with patch.object(Module, 'search_count', installed):
             with self.assertRaises(ValidationError), self.cr.savepoint():
                 purchase.button_confirm()
-            self.assertEqual(purchase.state, 'draft')
-            purchase.state = 'to approve'
+            self.assertEqual(purchase.state, 'to approve')
             with self.assertRaises(ValidationError), self.cr.savepoint():
                 purchase.button_approve(force=True)
             self.assertEqual(purchase.state, 'to approve')
@@ -259,3 +274,127 @@ class TestCommercialFlow(SupplyCompanyFixture, TransactionCase):
         with self.assertRaises(AccessError):
             self._as(self.env['sale.order'], self.keeper).with_context(
                 default_alvina_branch_request_id=record.id).create({'partner_id': self.vendor.id})
+
+    def test_double_validation_is_completed_for_only_the_automatic_purchase(self):
+        self.branch_company.write({'po_double_validation': 'two_step', 'po_double_validation_amount': 0})
+        companies = self.requester.company_ids
+        groups = self.requester.group_ids
+        record = self._flow()
+        self.assertEqual(record.sudo().purchase_order_id.state, 'purchase')
+        self.assertEqual(record.sudo().sale_order_id.state, 'sale')
+        self.assertFalse(record.sudo().purchase_order_id.invoice_ids)
+        self.assertEqual(self.requester.company_ids, companies)
+        self.assertEqual(self.requester.group_ids, groups)
+        self.assertFalse(self.requester.has_group('purchase.group_purchase_manager'))
+
+        ordinary = self.env['purchase.order'].with_user(self.requester).sudo().with_company(
+            self.branch_company).create({
+                'partner_id': self.supply_company.partner_id.id,
+                'order_line': [Command.create({
+                    'product_id': self.shared_product.id, 'product_qty': 1,
+                    'product_uom_id': self.shared_product.uom_id.id,
+                    'price_unit': 100,
+                })],
+            })
+        ordinary.button_confirm()
+        self.assertEqual(ordinary.state, 'to approve')
+        ordinary.with_context(alvina_automated_purchase_approval=ordinary.ids).button_approve(force=True)
+        self.assertEqual(ordinary.state, 'to approve', 'Public context cannot acquire private technical approval')
+        self.assertFalse(ordinary.picking_ids)
+
+    def test_confirmation_failure_rolls_back_request_pair_and_pickings(self):
+        models = ('alvina.branch.request', 'alvina.branch.request.line',
+                  'sale.order', 'purchase.order', 'stock.picking', 'stock.move')
+        counts = {model: self.env[model].search_count([]) for model in models}
+        with patch.object(type(self.env['purchase.order']), 'button_confirm',
+                          side_effect=UserError('Controlled fiscal validation failure')):
+            # No savepoint supplied by this caller: the service owns the full
+            # rollback boundary, including the already-confirmed sale picking.
+            with self.assertRaisesRegex(ValidationError, 'Controlled fiscal validation failure'):
+                self._flow()
+        for model, count in counts.items():
+            with self.subTest(model=model):
+                self.assertEqual(self.env[model].search_count([]), count)
+
+    def test_missing_buyer_fiscal_country_blocks_before_any_document(self):
+        self.branch_company.account_fiscal_country_id = False
+        models = ('alvina.branch.request', 'sale.order', 'purchase.order', 'stock.picking')
+        counts = {model: self.env[model].search_count([]) for model in models}
+        with self.assertRaisesRegex(ValidationError, 'país fiscal'):
+            self._flow()
+        for model, count in counts.items():
+            self.assertEqual(self.env[model].search_count([]), count)
+
+    def _logistics_successor(self, login, company=None):
+        company = company or self.supply_company
+        return self.env['res.users'].create({
+            'name': login, 'login': login, 'company_id': company.id,
+            'company_ids': [Command.set(company.ids)],
+            'group_ids': [Command.set([
+                self.env.ref('base.group_user').id,
+                self.env.ref('alvina_branch_requisition.group_industry_logistics').id,
+            ])],
+        })
+
+    def test_selected_active_responsible_is_retained_with_several_logistics_users(self):
+        self._logistics_successor('alvina-successor-one')
+        self._logistics_successor('alvina-successor-two')
+        self.assertEqual(self.configuration._get_sales_responsible(), self.keeper)
+        self.assertEqual(self._flow().sudo().sale_order_id.user_id, self.keeper)
+
+    def test_unique_logistics_successor_replaces_archived_assignee_without_membership_changes(self):
+        successor = self._logistics_successor('alvina-successor-unique')
+        self.keeper.active = False
+        self.assertNotIn(successor, self.branch.user_ids)
+        memberships = successor.company_ids
+        configured = self.configuration.sales_user_id
+        record = self._flow()
+        self.assertEqual(record.sudo().sale_order_id.user_id, successor)
+        self.assertEqual(self.configuration.sales_user_id, configured)
+        self.assertEqual(successor.company_ids, memberships)
+        self.assertNotIn(successor, self.branch.user_ids)
+        self.assertEqual(record.sudo().purchase_order_id.state, 'purchase')
+
+    def test_absent_assignee_uses_unique_authorized_logistics_user(self):
+        successor = self._logistics_successor('alvina-successor-no-selection')
+        self.configuration.sales_user_id = False
+        self.assertEqual(self.configuration._get_sales_responsible(), successor)
+        self.assertFalse(self.configuration.sales_user_id)
+        self.assertEqual(self._flow().sudo().sale_order_id.user_id, successor)
+
+    def test_selected_logistics_responsible_does_not_require_branch_membership(self):
+        responsible = self._logistics_successor('alvina-responsible-logistics-selected')
+        self.configuration.sales_user_id = responsible
+        self.assertNotIn(responsible, self.branch.user_ids)
+        record = self._flow()
+        self.assertEqual(record.sudo().sale_order_id.user_id, responsible)
+        self.assertEqual(record.sudo().purchase_order_id.state, 'purchase')
+        self.assertEqual(responsible.company_ids, self.supply_company)
+
+    def test_no_or_multiple_successors_require_an_explicit_selection(self):
+        self.keeper.active = False
+        for count in (0, 2):
+            if count:
+                self._logistics_successor('alvina-successor-ambiguous-one')
+                self._logistics_successor('alvina-successor-ambiguous-two')
+            with self.subTest(count=count):
+                with self.assertRaisesRegex(ValidationError, 'exactamente un usuario'):
+                    self._flow()
+                self.assertFalse(self.env['sale.order'].search([('alvina_branch_request_id', '!=', False)]))
+
+    def test_foreign_company_logistics_user_is_not_a_successor(self):
+        self._logistics_successor('alvina-successor-foreign', self.unrelated_company)
+        self.keeper.active = False
+        with self.assertRaisesRegex(ValidationError, 'exactamente un usuario'):
+            self._flow()
+
+    def test_active_invalid_assignee_is_not_silently_replaced(self):
+        self._logistics_successor('alvina-successor-ignored')
+        self.keeper.group_ids = [Command.clear()]
+        with self.assertRaisesRegex(ValidationError, 'responsable seleccionado'):
+            self._flow()
+
+    def test_unassigned_standard_sales_user_still_cannot_be_responsible_for_a_branch(self):
+        self.branch.user_ids = [Command.unlink(self.keeper.id)]
+        with self.assertRaisesRegex(ValidationError, 'Asigne al responsable'):
+            self._flow()

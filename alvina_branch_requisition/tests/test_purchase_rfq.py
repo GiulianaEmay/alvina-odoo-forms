@@ -8,6 +8,7 @@ from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tests import TransactionCase, tagged
 
 from .test_supply_companies import SupplyCompanyFixture
+from ..models.dates import minimum_required_date
 
 
 @tagged('post_install', '-at_install')
@@ -295,7 +296,7 @@ class TestPurchaseRfq(SupplyCompanyFixture, TransactionCase):
             default_alvina_branch_request_id=987654321,
         )
         record = requests.create({
-            'branch_id': self.branch.id, 'required_date': fields.Date.today(),
+            'branch_id': self.branch.id, 'required_date': minimum_required_date(fields.Datetime.now()),
             'submission_key': str(uuid4()),
             'line_ids': [Command.create({
                 'product_id': self.shared_product.id, 'product_qty': 4,
@@ -312,7 +313,7 @@ class TestPurchaseRfq(SupplyCompanyFixture, TransactionCase):
         requests = self._as(self.env['alvina.branch.request'], self.requester).with_context(
             uom=self.env.ref('uom.product_uom_dozen').id)
         record = requests.create({
-            'branch_id': self.branch.id, 'required_date': fields.Date.today(),
+            'branch_id': self.branch.id, 'required_date': minimum_required_date(fields.Datetime.now()),
             'submission_key': str(uuid4()),
             'line_ids': [Command.create({
                 'product_id': self.shared_product.id, 'product_qty': 4,

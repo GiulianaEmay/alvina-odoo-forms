@@ -8,3 +8,7 @@ consolidation_keeper,consolidation keeper,model_alvina_branch_consolidation,grou
 consolidation_line_keeper,consolidation line keeper,model_alvina_branch_consolidation_line,group_keeper,1,1,1,1
 configuration_admin,central supply configuration,model_alvina_supply_configuration,group_admin,1,1,1,0
 balance_cancellation_keeper,balance cancellation keeper,model_alvina_branch_balance_cancellation,group_keeper,1,0,1,0
+dispatch_note_reader,dispatch note reader,model_alvina_branch_dispatch,group_requester,1,0,0,0
+dispatch_note_line_reader,dispatch note line reader,model_alvina_branch_dispatch_line,group_requester,1,0,0,0
+dispatch_receipt_user,dispatch receipt user,model_alvina_branch_dispatch_receipt,group_requester,1,1,1,1
+dispatch_receipt_line_user,dispatch receipt line user,model_alvina_branch_dispatch_receipt_line,group_requester,1,1,1,1

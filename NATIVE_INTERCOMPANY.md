@@ -1,85 +1,110 @@
-# Auditoría de integración nativa y privada
+# Compatibilidad nativa y privada — 19.0.3.0.0
 
-## Variante publicada por separado
+## Estado
+
+La implementación se contrasta con Odoo **Community 19**, revisión oficial
+`e1ed4fe077ba98ce7ac6802a43bb68242081dee9`. No se dispone del checkout Enterprise
+autorizado ni se ha ejecutado la pila privada real. La validación local no
+certifica esa instalación. No se ha desplegado ni cambiado producción.
+
+## Automatismo interempresa Enterprise
+
+Community referencia `account_inter_company_rules` en `base_setup` como
+mecanismo de generación de ventas/compras entre compañías. Su implementación
+no está en el código disponible. No se ha verificado ningún hook, contexto de
+omisión o método generador Enterprise.
+
+Este addon crea **ambos** documentos y los confirma mediante acciones estándar.
+Si otro automatismo genera la contraparte al confirmar, podría duplicarlos. Por
+eso `_assert_supported()` bloquea habilitar/usar el flujo y confirmar/aprobar
+sus órdenes cuando `account_inter_company_rules` está instalado, pendiente de
+actualización o pendiente de eliminación. Las órdenes ordinarias no se someten
+a este guardia específico del abastecimiento.
+
+**El bloqueo sigue vigente.** No desinstalar el módulo Enterprise, falsear su
+estado, quitar el guardia ni inventar flags para superarlo. Antes de habilitar
+la instalación real, obtener en una copia de pruebas:
+
+1. Revisión exacta y código completo de `account_inter_company_rules` y de los
+   addons que lo heredan, con sus manifests y dependencias.
+2. Configuración de generación/sincronización, usuarios y compañías utilizados,
+   así como opciones de confirmación, aprobación y validación.
+3. Extensiones y automatizaciones de Compras, Ventas e Inventario que creen,
+   confirmen o sincronicen documentos y operaciones.
+4. Mapa real de compañías, contactos comerciales, impuestos, monedas, almacenes,
+   operaciones, rutas, ubicaciones y usuarios de sucursal/Logística.
+
+Con esa evidencia se necesita un adaptador auditado y pruebas de unicidad al
+confirmar/aprobar ambos documentos, reintentar, operar concurrentemente,
+cancelar y registrar Inventario. Simular la presencia del módulo para comprobar
+que el guardia bloquea **no es probar Enterprise**.
+
+El servicio también revierte la operación si una extensión genera facturas o
+valida cantidades físicas durante su confirmación comercial. Esos controles no
+reemplazan la revisión de automatizaciones privadas ni garantizan ausencia de
+efectos externos ajenos a la transacción de base de datos.
+
+## Fabricación privada conocida
+
+El ZIP facilitado de `alvinha_mrp` incluye un override de creación de líneas de
+venta que puede llamar `_create_mrp_production` cuando el producto tiene una LdM,
+incluso con una OV en borrador. Fabricar por ese efecto no corresponde a enviar
+insumos a las sucursales.
+
+El puente comprueba la presencia del módulo y las LdM del producto para Industria.
+Si se dispararía fabricación, rechaza el envío con un mensaje de integración
+pendiente. No falsifica `is_from_mrp`, no inventa contextos de omisión ni crea
+órdenes de fabricación. Se debe revisar el código privado efectivamente instalado
+y resolver su adaptación antes de usar esos productos.
+
+La ruta privada `/portal/production/new` pertenece a `alvinha_mrp`; se conserva
+sin modificar. El nuevo flujo de insumos usa `/branch/requisition/new`. Una
+redirección hacia producción no demuestra que el menú de abastecimientos de
+Ventas esté funcionando.
+
+## Edición de ventas privada
+
+`alvinha_sale_management` restringe la edición de líneas a su creador o a un
+administrador de Ventas. Las líneas generadas automáticamente pueden conservar
+como creador técnico al usuario de la sucursal. El nuevo rol de Logística
+comparte el acceso a las ventas vinculadas, pero no certifica que ese override
+privado permita todas las ediciones esperadas.
+
+Revisar esa combinación con el código y la base representativa. No conceder
+Ventas: Administrador como sustituto de un adaptador ni eliminar sus controles
+sin una evaluación del ámbito. El flujo aprobado no exige que Logística cambie
+los precios para confirmar lo físicamente enviado.
+
+## Sucursal e Industria dentro de la misma compañía
+
+El procedimiento funcional es uniforme, pero la compañía operativa sigue siendo
+la real. Si la compradora es Industria, no corresponde generar una compra/venta
+interempresa de la entidad consigo misma ni crear una empresa ficticia.
+
+La variante interna mediante una orden y un traslado entre ubicaciones reales
+requiere aprobación y mapa de destino. `_create_internal_dispatch()` permanece
+bloqueado y no genera documentos. La presencia del campo de ubicación interna
+no habilita esa variante en esta entrega.
+
+## Rutas de recepción y trazabilidad
+
+La confirmación guiada de sucursal admite una única recepción de compra pendiente
+de un paso, con destino interno de la compradora. No valida automáticamente una
+cadena de entrada, calidad o almacenamiento de varios pasos. Los productos con
+lotes o números de serie requieren una integración de sus identificadores reales;
+el asistente los bloquea y no los inventa. Conservar los saldos de entradas y
+salidas parciales es requisito de configuración.
+
+## Variante anterior con esquema diferente
 
 La revisión remota encontró `feature/central-supply-multicompany` en
-`258a450923d1fe20317eb12cf7e0d98807c7dc4b`, basada en `bf19163`, mientras esta
-entrega parte de `feature/multi-company-supply` en `d59eea3`. Ambas versiones
-anteriores se identifican como 19.0.1.2.0, pero su esquema no es idéntico.
+`258a450923d1fe20317eb12cf7e0d98807c7dc4b`, basada en `bf19163`. La línea de esta
+entrega conserva la implementación multiempresa de `d59eea3`. Ambas se
+identificaban como **19.0.1.2.0**, pero no tenían el mismo esquema.
+
 La alternativa utiliza `keeper_ids`/`alvina_binding_keeper_rel`, fija una sola
-sucursal y consulta costo actual en su consolidado. Esta rama no se ha fusionado
-con ella ni la ha sobrescrito. La actualización detecta aquella relación y exige
-un mapeo revisado; no elimina o mezcla sus asignaciones automáticamente.
-Antes de actualizar una base existente se necesita el **commit del addon
-efectivamente instalado**. La evidencia de migración actual corresponde a
-`d59eea3` y sus migraciones anteriores, no a aquella alternativa.
-
-## Código efectivamente disponible
-
-Se verificó Odoo Community 19 en la revisión
-`e1ed4fe077ba98ce7ac6802a43bb68242081dee9`. Su módulo `base_setup` referencia
-`account_inter_company_rules` como automatismo de ventas/compras entre compañías:
-
-- `addons/base_setup/models/res_config_settings.py`, campo de instalación.
-- `addons/base_setup/views/res_config_settings_views.xml`, descripción del automatismo.
-- `addons/stock/models/res_company.py`, propiedades de ubicaciones intercompañía
-  de los contactos comerciales de las compañías.
-
-No se dispone del checkout Enterprise autorizado. El intento de consultar
-`odoo/enterprise`, rama `19.0`, devolvió «Repository not found». Por tanto **no
-se ha verificado ningún hook, contexto de omisión, sincronización o método
-generador nativo Enterprise**. No se ha desactivado ni alterado su configuración.
-
-## Decisión implementada
-
-El servicio de esta rama produce los dos borradores atómicamente en el runtime
-Community probado. Un automatismo que generase la contraparte al confirmar uno
-podría duplicarla. El guardia `_assert_supported()` rechaza el nuevo flujo si
-`account_inter_company_rules` está instalado, pendiente de actualización o
-eliminación. Se ejecuta al habilitar/usar el flujo y en las confirmaciones de
-sus órdenes vinculadas, incluida la aprobación estándar de compras. Las órdenes
-normales ajenas al addon no se modifican.
-
-No se debe desinstalar el automatismo, editar su estado ni quitar este guardia
-para hacer pasar la prueba. Tampoco afirmar que no está instalado basándose solo
-en el código disponible aquí.
-
-Para integrar la instalación real hace falta obtener **en pruebas**:
-
-1. Revisión exacta y código completo de `account_inter_company_rules` y de
-   cualquier addon que lo herede; dependencias/manifest de esos addons.
-2. Configuración existente de generación/sincronización de OC/OV y sus usuarios,
-   compañías, diarios si aplica y opciones de confirmación/validación.
-3. Extensiones de Compras, Ventas, Inventario y automatizaciones de servidor que
-   creen, confirmen o sincronicen estos documentos o sus entregas/recepciones.
-4. Mapa real de compañías, contactos comerciales, almacenes, operaciones, rutas
-   y ubicaciones; roles existentes de Rolly y de los usuarios de sucursal.
-
-Con esa evidencia se podrá adaptar un mecanismo real y probar unicidad incluso
-al confirmar/aprobar ambos documentos, concurrencia, cancelación y sincronización
-de Inventario. No inventar nombres de campos/hook de Enterprise.
-
-## Efecto privado conocido
-
-El ZIP facilitado (`alvinha-cybe.zip`) contiene `alvinha_mrp/models/sale_order.py`:
-su override de creación de líneas (aproximadamente líneas 218–242) puede llamar
-`_create_mrp_production` (aproximadamente 247) cuando el producto tiene una LdM,
-incluso con la OV en borrador. Esto no corresponde al despacho de insumos.
-
-El nuevo puente comprueba ese módulo instalado y las LdM del producto para
-Industria. Si se activaría fabricación, rechaza el envío con un mensaje de
-integración pendiente. No falsifica `is_from_mrp`, no copia código privado ni
-crea órdenes de fabricación para eludir el problema. La instalación representativa
-debe verificar otras automatizaciones que no aparecen en el ZIP.
-
-## Una misma compañía
-
-El requisito funcional es uniforme por sucursal, con independencia de su
-condición jurídica. La compañía operativa debe seguir siendo la realmente
-configurada. Si es Industria, no corresponde generar compra/venta intercompañía
-de la entidad consigo misma ni inventar otra empresa.
-
-Se propuso conservar formulario, revisión, preparación y PDF mediante una orden
-interna y un traslado a una ubicación existente. La confirmación de esa variante
-y su destino siguen pendientes. `_create_internal_dispatch()` está bloqueado
-expresamente y no produce documentos. Esta rama **todavía no cubre esa operación**.
+sucursal y consulta costo actual en el consolidado. No se ha fusionado ni
+sobrescrito esa rama. La migración detecta su relación y exige un mapeo revisado;
+no borra ni mezcla asignaciones para continuar. Identificar el commit instalado
+antes de aplicar una actualización. La evidencia de migración histórica aquí
+corresponde a `d59eea3` y sus antecedentes, no a esa alternativa.

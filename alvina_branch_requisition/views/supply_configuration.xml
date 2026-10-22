@@ -25,8 +25,9 @@
                     </div>
                     <div class="alert alert-warning" role="status">
                         Si está instalado el automatismo interempresa de Odoo, se requiere un adaptador
-                        verificado para evitar documentos duplicados. Las compras y ventas se preparan en borrador,
-                        sin confirmación ni facturación automática.
+                        verificado para evitar documentos duplicados. Al enviar un requerimiento,
+                        Odoo genera y confirma la compra y la venta para preparar sus operaciones de Inventario.
+                        Las cantidades enviadas y recibidas se confirman por separado. No se generan facturas.
                     </div>
                     <group>
                         <field name="name"/>

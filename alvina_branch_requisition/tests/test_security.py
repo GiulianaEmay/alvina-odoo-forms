@@ -5,6 +5,8 @@ from odoo import Command, fields
 from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tests import TransactionCase, tagged
 
+from ..models.dates import minimum_required_date
+
 
 @tagged('post_install', '-at_install')
 class TestRequisitionSecurity(TransactionCase):
@@ -43,7 +45,7 @@ class TestRequisitionSecurity(TransactionCase):
     def _request(self, user=None, branch=None, context=None, **extra):
         vals = {
             'branch_id': (branch or self.branch).id,
-            'required_date': fields.Date.today(), 'submission_key': str(uuid4()),
+            'required_date': minimum_required_date(fields.Datetime.now()), 'submission_key': str(uuid4()),
             'line_ids': [Command.create({
                 'product_id': self.product.id, 'product_qty': 5,
             })],

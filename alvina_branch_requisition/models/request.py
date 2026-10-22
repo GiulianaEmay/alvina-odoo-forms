@@ -5,6 +5,7 @@ import math
 _CREATING = ContextVar("alvina_creating", default=False)
 
 from .validation import CATEGORIES, pending, quantity
+from .dates import minimum_required_date
 
 class BranchRequest(models.Model):
     _name = 'alvina.branch.request'
@@ -19,7 +20,7 @@ class BranchRequest(models.Model):
     supply_company_id = fields.Many2one(related='branch_id.supply_company_id', store=True, string='Empresa abastecedora')
     warehouse_id = fields.Many2one(related='branch_id.warehouse_id', store=True, string='Almacén abastecedor')
     request_date = fields.Datetime(default=fields.Datetime.now, required=True, readonly=True)
-    required_date = fields.Date(required=True)
+    required_date = fields.Date(required=True, default=lambda self: self._minimum_required_date())
     note = fields.Text()
     state = fields.Selection([('pending', 'Pendiente'), ('review', 'En revisión'),
         ('partial', 'Parcialmente atendido'), ('done', 'Atendido'), ('cancel', 'Cancelado')], default='pending', required=True, readonly=True)
@@ -74,11 +75,19 @@ class BranchRequest(models.Model):
         finally:
             _CREATING.reset(token)
 
+    @api.model
+    def _minimum_required_date(self):
+        return minimum_required_date(fields.Datetime.now())
+
     @api.constrains('required_date')
     def _check_date(self):
+        minimum = self._minimum_required_date()
         for rec in self:
-            if rec.required_date < fields.Date.context_today(rec):
-                raise ValidationError(_('La fecha requerida no puede ser anterior a hoy.'))
+            if not rec.required_date or rec.required_date < minimum:
+                raise ValidationError(_(
+                    'La fecha requerida debe ser el %(date)s o posterior '
+                    '(mínimo dos días calendario según la hora de Perú).',
+                    date=minimum.strftime('%d/%m/%Y')))
 
     def write(self, vals):
         raise AccessError(_('Los requerimientos enviados son inmutables; use las acciones autorizadas.'))

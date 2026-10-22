@@ -1,4 +1,4 @@
-"""Drafts, reservations, physical deliveries and receipts stay distinct."""
+"""Confirmed documents, reservations, physical deliveries and receipts stay distinct."""
 from odoo import Command
 from odoo.exceptions import AccessError, ValidationError
 from odoo.tests import TransactionCase, tagged
@@ -11,6 +11,9 @@ class TestBranchFulfillment(SupplyCompanyFixture, TransactionCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        (cls.supply_company | cls.branch_company).write({
+            'account_fiscal_country_id': cls.env.ref('base.pe').id,
+        })
         cls.keeper.write({'group_ids': [Command.link(
             cls.env.ref('sales_team.group_sale_salesman').id)]})
         cls.warehouse.delivery_steps = 'ship_only'
@@ -22,6 +25,7 @@ class TestBranchFulfillment(SupplyCompanyFixture, TransactionCase):
                 'name': 'UPAO receipt fulfillment test', 'code': 'UFLT',
                 'company_id': cls.branch_company.id,
             })
+        cls.receiving_warehouse.in_type_id.create_backorder = 'always'
         cls.branch.resource_ref.company_id = False
         cls.supply_company.partner_id.company_id = False
         cls.branch.write({
@@ -56,7 +60,6 @@ class TestBranchFulfillment(SupplyCompanyFixture, TransactionCase):
 
     def _outgoing(self, request):
         sale = self._as(request.sale_order_id, self.keeper)
-        sale.action_confirm()
         picking = sale.picking_ids.filtered(lambda item: item.picking_type_code == 'outgoing')
         self.assertEqual(len(picking), 1)
         return picking
@@ -86,15 +89,15 @@ class TestBranchFulfillment(SupplyCompanyFixture, TransactionCase):
         self._complete(returned, quantity)
         return returned
 
-    def test_draft_documents_and_reservations_are_not_deliveries(self):
+    def test_confirmed_documents_and_reservations_are_not_deliveries(self):
         request = self._flow_request()
         line = request.line_ids
-        self.assertEqual(request.sale_order_id.state, 'draft')
-        self.assertEqual(request.purchase_order_id.state, 'draft')
+        self.assertEqual(request.sale_order_id.state, 'sale')
+        self.assertEqual(request.purchase_order_id.state, 'purchase')
         self.assertEqual(line.qty_supplied, 0)
         self.assertEqual(line.qty_received, 0)
-        self.assertEqual(line.qty_prepared, 0)
-        self.assertEqual(request.delivery_state, 'none')
+        self.assertEqual(line.qty_prepared, 20)
+        self.assertEqual(request.delivery_state, 'preparing')
         picking = self._outgoing(request)
         picking.action_assign()
         self.assertEqual(line.qty_prepared, 20)
@@ -103,7 +106,7 @@ class TestBranchFulfillment(SupplyCompanyFixture, TransactionCase):
         self.assertEqual(request.delivery_state, 'preparing')
         picking.move_ids.picked = True
         self.assertEqual(line.qty_supplied, 0, 'Picked is indicative; only done is delivered')
-        self.assertEqual(request.purchase_order_id.state, 'draft')
+        self.assertEqual(request.purchase_order_id.state, 'purchase')
         self.assertEqual(line.qty_received, 0)
 
     def test_twenty_requested_fifteen_delivered_five_backordered(self):
@@ -120,8 +123,9 @@ class TestBranchFulfillment(SupplyCompanyFixture, TransactionCase):
         self.assertEqual(backorder.move_ids.product_uom_qty, 5)
         self.assertNotEqual(backorder.state, 'done')
         self.assertEqual(backorder.move_ids.sale_line_id.alvina_request_line_id, line)
-        self.assertEqual(request.purchase_order_id.state, 'draft')
-        self.assertFalse(request.purchase_order_id.picking_ids)
+        self.assertEqual(request.purchase_order_id.state, 'purchase')
+        self.assertTrue(request.purchase_order_id.picking_ids)
+        self.assertNotEqual(request.purchase_order_id.picking_ids.state, 'done')
         self.assertEqual(line.qty_received, 0)
         self._complete(backorder, 5)
         self.assertEqual(line.qty_supplied, 20)
@@ -167,8 +171,8 @@ class TestBranchFulfillment(SupplyCompanyFixture, TransactionCase):
         wizard = self._as(self.env['alvina.branch.consolidation'], self.keeper).create({})
         wizard.action_refresh()
         self.assertEqual(wizard.line_ids.product_qty, 80)
-        self.assertEqual(wizard.line_ids.free_qty, 50)
-        self.assertEqual(wizard.line_ids.reserved_qty, 20)
+        self.assertEqual(wizard.line_ids.free_qty, 0)
+        self.assertEqual(wizard.line_ids.reserved_qty, 70)
         self.assertEqual(wizard.line_ids.suggested_qty, 10)
 
     def test_returns_and_returns_of_returns_follow_physical_done_moves(self):
@@ -214,21 +218,31 @@ class TestBranchFulfillment(SupplyCompanyFixture, TransactionCase):
         self.assertEqual(request.line_ids.qty_pending, 5)
         self.assertEqual(self.shared_product.with_context(warehouse_id=self.warehouse.id).qty_available, 0)
 
-    def test_purchase_receipts_require_their_own_manual_validation(self):
+    def test_buyer_confirmation_records_actual_receipt_and_standard_return(self):
         request = self._flow_request()
-        self._complete(self._outgoing(request), 15)
-        purchase = self._as(request.purchase_order_id, self.requester)
-        purchase.button_confirm()
-        receipt = purchase.picking_ids
+        outgoing = self._outgoing(request)
+        self._complete(outgoing, 15)
+        receipt = request.purchase_order_id.picking_ids
         self.assertEqual(len(receipt), 1)
         self.assertNotEqual(receipt.state, 'done')
         self.assertEqual(request.line_ids.qty_received, 0)
-        self._complete(receipt, 12)
+        guide = outgoing.alvina_emitted_dispatch_ids
+        self.assertEqual(len(guide), 1)
+        action = self._as(guide, self.requester).action_open_receipt()
+        wizard = self._as(self.env['alvina.branch.dispatch.receipt'], self.requester).browse(action['res_id'])
+        wizard.line_ids.quantity = 12
+        wizard.note = 'Se recibieron doce de las quince unidades despachadas.'
+        wizard.action_confirm()
+        self.assertEqual(receipt.state, 'done')
+        self.assertEqual(receipt.alvina_dispatch_id, guide)
         self.assertEqual(request.line_ids.qty_received, 12)
         self.assertEqual(request.line_ids.qty_supplied, 15)
-        self._return(receipt, 2)
+        returned = self._return(receipt, 2)
         self.assertEqual(request.line_ids.qty_received, 10)
         self.assertEqual(request.line_ids.qty_supplied, 15)
+        self._return(returned, 1)
+        self.assertEqual(request.line_ids.qty_received, 11)
+        self.assertEqual(guide.line_ids.qty_received, 11)
 
     def test_cancelled_reserved_dispatch_never_counts_as_delivered(self):
         request = self._flow_request()
@@ -266,6 +280,7 @@ class TestBranchFulfillment(SupplyCompanyFixture, TransactionCase):
         with self.assertRaises(ValidationError):
             self._cancel_balance(request, 5)
         picking.backorder_ids.action_cancel()
+        request.purchase_order_id.picking_ids.action_cancel()
         move_states = {move.id: move.state for move in request.line_ids._alvina_delivery_moves()}
         audit = self._cancel_balance(request, 5, 'Industria no repondrá estas cinco unidades')
         line = request.line_ids
@@ -283,7 +298,9 @@ class TestBranchFulfillment(SupplyCompanyFixture, TransactionCase):
 
     def test_balance_cancellation_requires_reason_and_available_balance(self):
         request = self._flow_request()
-        # Draft commercial documents have not generated inventory operations.
+        # Closing demand is explicit; cancel both pending stock operations first.
+        request.sale_order_id.picking_ids.action_cancel()
+        request.purchase_order_id.picking_ids.action_cancel()
         with self.assertRaises(ValidationError):
             self._cancel_balance(request, 1, '   ')
         for quantity in (0, -1, 21, float('nan'), float('inf')):
@@ -300,6 +317,8 @@ class TestBranchFulfillment(SupplyCompanyFixture, TransactionCase):
 
     def test_batch_cancellation_cannot_overdraw_the_same_line(self):
         request = self._flow_request()
+        request.sale_order_id.picking_ids.action_cancel()
+        request.purchase_order_id.picking_ids.action_cancel()
         ledger = self._as(self.env['alvina.branch.balance.cancellation'], self.keeper)
         with self.assertRaises(ValidationError):
             ledger.create([{
@@ -322,6 +341,8 @@ class TestBranchFulfillment(SupplyCompanyFixture, TransactionCase):
                 'request_line_id': request.line_ids.id, 'quantity': 1,
                 'reason': 'Intento de suplantación', 'user_id': self.requester.id,
             })
+        request.sale_order_id.picking_ids.action_cancel()
+        request.purchase_order_id.picking_ids.action_cancel()
         audit = self._cancel_balance(request, 1)
         with self.assertRaises(AccessError):
             audit.write({'quantity': 2})

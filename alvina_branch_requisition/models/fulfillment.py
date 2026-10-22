@@ -1,6 +1,6 @@
 """Physical fulfillment from standard inventory operations, without auto-validation.
 
-The commercial documents remain drafts until their normal operators confirm them.
+The supply service confirms the linked commercial documents automatically.
 Reserved quantities and purchase receipts are deliberately distinct from Industry's
 actual, net dispatches.  In particular, a return is physical regardless of the
 ``to_refund`` flag used by the standard invoicing/delivered-quantity computation.
@@ -118,7 +118,7 @@ class RequestLineFulfillment(models.Model):
         self.ensure_one()
         self.request_id.check_access('read')
         if (not self.env.user.has_group('alvina_branch_requisition.group_keeper')
-                or self.env.uid not in self.branch_id.sudo().user_ids.ids
+                or not self.branch_id._alvina_user_can_attend_supply()
                 or self.supply_company_id not in self.env.companies):
             raise AccessError(_('El cierre de saldo corresponde al almacenero autorizado de Industria.'))
         if not self.request_id.supply_flow or self.request_id.state == 'cancel':

@@ -9,6 +9,8 @@ from odoo import Command, api, fields
 from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tests import HttpCase, TransactionCase, tagged
 
+from ..models.dates import minimum_required_date
+
 
 class SupplyCompanyFixture:
     @classmethod
@@ -94,7 +96,7 @@ class SupplyCompanyFixture:
         product = self.product if product is None else product
         values = {
             'branch_id': (branch or self.branch).id,
-            'required_date': fields.Date.today(), 'submission_key': str(uuid4()),
+            'required_date': minimum_required_date(fields.Datetime.now()), 'submission_key': str(uuid4()),
             'line_ids': [Command.create({
                 'product_id': product.id, 'product_qty': quantity,
             })],
@@ -272,7 +274,7 @@ class TestSupplyCompanyPortal(SupplyCompanyFixture, HttpCase):
         soup = BeautifulSoup(response.content, 'html.parser')
         self.assertIsNotNone(soup.select_one('#alvina-request-form'))
         values = {node['name']: node.get('value', '') for node in soup.select('input[name]')}
-        values['required_date'] = str(fields.Date.today())
+        values['required_date'] = str(minimum_required_date(fields.Datetime.now()))
         return soup, values
 
     def test_supplier_catalog_is_narrow_and_request_is_not_created_with_sudo(self):

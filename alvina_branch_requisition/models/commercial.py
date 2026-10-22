@@ -4,10 +4,16 @@ No native Enterprise bypass is guessed. An audited adapter must handle native
 automation before this service can be enabled alongside it.
 """
 import math
+from contextvars import ContextVar
 from datetime import datetime, time
 
 from odoo import api, Command, fields, models, _
-from odoo.exceptions import AccessError, ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
+
+
+# A client-supplied context value cannot confer technical approval. The scope is
+# active only while approving the exact purchase made by this private service.
+_AUTOMATED_PURCHASE_APPROVAL = ContextVar('alvina_automated_purchase_approval', default=frozenset())
 
 
 class BranchRequest(models.Model):
@@ -20,6 +26,14 @@ class BranchRequest(models.Model):
     sale_order_ids = fields.One2many('sale.order', 'alvina_branch_request_id', readonly=True)
     sale_order_id = fields.Many2one('sale.order', compute='_compute_sale_order', store=True,
                                     string='Venta de Industria', readonly=True, copy=False)
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        # Include header, immutable lines, commercial pair and generated stock
+        # operations in the same rollback boundary, even if an RPC caller catches
+        # a validation failure rather than aborting the entire transaction.
+        with self.env.cr.savepoint():
+            return super().create(vals_list)
 
     @api.depends('sale_order_ids')
     def _compute_sale_order(self):
@@ -48,8 +62,17 @@ class BranchRequest(models.Model):
         self._check_supply_actor()
         self.env.cr.execute('SELECT id FROM alvina_branch_request WHERE id = %s FOR UPDATE', (self.id,))
         self.invalidate_recordset(['sale_order_id', 'purchase_order_id'])
-        if self.sudo().sale_order_id:
-            return self.sale_order_id
+        existing = self.sudo()
+        if existing.sale_order_id:
+            if not existing.purchase_order_id:
+                raise ValidationError(_(
+                    'El abastecimiento tiene una venta sin su compra vinculada. '
+                    'Revise su integridad antes de continuar; no se duplicarán documentos.'))
+            return existing.sale_order_id
+        if existing.purchase_order_id:
+            raise ValidationError(_(
+                'El abastecimiento tiene una compra sin su venta vinculada. '
+                'Revise su integridad antes de continuar; no se duplicarán documentos.'))
         if self.operation_mode == 'internal':
             return self._create_internal_dispatch()
         configuration = self.supply_config_id.sudo()
@@ -79,7 +102,8 @@ class BranchRequest(models.Model):
             'alvina_branch_request_id': self.id, 'company_id': supplier.id,
             'partner_id': customer.id, 'partner_invoice_id': customer.id,
             'partner_shipping_id': customer.id, 'warehouse_id': self.warehouse_id.id,
-            'pricelist_id': configuration.pricelist_id.id, 'user_id': configuration.sales_user_id.id,
+            'pricelist_id': configuration.pricelist_id.id,
+            'user_id': configuration._get_sales_responsible().id,
             'origin': self.name, 'date_order': self.request_date,
             'commitment_date': datetime.combine(self.required_date, time(12)), 'state': 'draft',
             'order_line': [Command.create({
@@ -116,7 +140,7 @@ class BranchRequest(models.Model):
                 'tax_ids': [Command.set(taxes.ids)],
                 'date_planned': datetime.combine(self.required_date, time(12)),
             }))
-        purchases.create({
+        purchase = purchases.create({
             'alvina_branch_request_id': self.id, 'company_id': buyer.id,
             'partner_id': supplier.partner_id.id, 'currency_id': self.currency_id.id,
             'fiscal_position_id': fiscal_position.id,
@@ -125,7 +149,50 @@ class BranchRequest(models.Model):
             'state': 'draft', 'user_id': False, 'origin': self.name,
             'date_order': self.request_date, 'order_line': commands,
         })
+        self._confirm_supply_documents(sale, purchase)
         return sale
+
+    def _confirm_supply_documents(self, sale, purchase):
+        """Confirm only this validated pair; physical validation stays manual."""
+        self.ensure_one()
+        sale.ensure_one()
+        purchase.ensure_one()
+        self._check_supply_actor()
+        if (not sale.env.su or not purchase.env.su
+                or sale.alvina_branch_request_id.id != self.id
+                or purchase.alvina_branch_request_id.id != self.id
+                or sale.company_id.id != self.supply_company_id.id
+                or purchase.company_id.id != self.company_id.id
+                or sale.state not in ('draft', 'sent')
+                or purchase.state not in ('draft', 'sent')):
+            raise AccessError(_('La confirmación automática está limitada a los documentos nuevos de este requerimiento.'))
+        self.supply_config_id.sudo()._assert_supported()
+        try:
+            sale.action_confirm()
+            purchase.button_confirm()
+            if purchase.state == 'to approve':
+                # Core button_approve rechecks _approval_allowed even with
+                # force=True. Grant technical approval to this one ID, without
+                # changing the company's policy or giving the actor a role.
+                token = _AUTOMATED_PURCHASE_APPROVAL.set(frozenset(purchase.ids))
+                try:
+                    purchase.button_approve()
+                finally:
+                    _AUTOMATED_PURCHASE_APPROVAL.reset(token)
+        except UserError as error:
+            raise ValidationError(_(
+                'No se pudo confirmar el abastecimiento con su configuración actual: %(reason)s',
+                reason=str(error))) from error
+        if sale.state != 'sale' or purchase.state != 'purchase':
+            raise ValidationError(_(
+                'No se pudieron confirmar la venta y la compra de este abastecimiento. '
+                'Revise su configuración; el envío se ha revertido.'))
+        # This service never creates invoices or validates stock operations.
+        if (sale.invoice_ids or purchase.invoice_ids
+                or any(picking.state == 'done' for picking in sale.picking_ids | purchase.picking_ids)):
+            raise ValidationError(_(
+                'Un automatismo externo facturó o validó existencias al confirmar el abastecimiento. '
+                'Se requiere revisar esa integración; el envío se ha revertido.'))
 
     def action_cancel(self):
         self._manager()
@@ -203,6 +270,13 @@ class PurchaseOrder(models.Model):
     _inherit = 'purchase.order'
 
     alvina_sale_order_id = fields.Many2one(related='alvina_branch_request_id.sale_order_id', string='OV de Industria')
+
+    def _approval_allowed(self):
+        self.ensure_one()
+        if (self.env.su and self.id in _AUTOMATED_PURCHASE_APPROVAL.get()
+                and self.alvina_branch_request_id.supply_flow):
+            return True
+        return super()._approval_allowed()
 
     def button_confirm(self):
         for order in self.filtered('alvina_branch_request_id'):

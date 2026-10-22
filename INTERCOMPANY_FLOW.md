@@ -1,173 +1,180 @@
-# Flujo uniforme de sucursales — 19.0.2.0.0
+# Flujo de abastecimiento — 19.0.3.0.0
 
-## Estado de esta entrega
+## Procedimiento único
 
-Implementación y pruebas en Odoo 19 **Community**, en bases locales desechables.
-No se ha instalado ni actualizado producción. Esta rama conserva la versión
-anterior; no modifica las ramas publicadas previamente.
+Todas las sucursales abastecidas por Industria siguen la misma secuencia:
 
-Hay integraciones pendientes antes de activar el flujo en la instalación real:
+**Sucursal solicita → Odoo crea y confirma OC/OV → Logística despacha →
+guía interna valorizada → sucursal confirma recepción real.**
 
-1. No se dispone del código Enterprise de `account_inter_company_rules`. El addon
-   bloquea expresamente la activación y confirmación de sus documentos vinculados
-   cuando ese automatismo está instalado, hasta contar con un adaptador auditado.
-   No se adivinan métodos, flags ni compatibilidad. Véase [NATIVE_INTERCOMPANY.md](NATIVE_INTERCOMPANY.md).
-2. Para una sucursal que comparte compañía con Industria se propuso una orden
-   interna y un traslado entre ubicaciones existentes. Falta aprobar esa variante
-   y confirmar su ubicación de destino. Este caso permanece bloqueado; no crea
-   compras/ventas de la compañía a sí misma ni empresas ficticias.
-3. Existe otra rama publicada, `feature/central-supply-multicompany`, con la misma
-   versión 19.0.1.2.0 pero otro esquema. No se fusionó ni sobrescribió. Si la base
-   instalada procede de ella, hace falta una migración específica de sus
-   asignaciones. Esta actualización detecta su tabla de almaceneros y se detiene
-   en lugar de descartarlos. Confirmar el commit instalado, no solo la versión.
+La sucursal compra en su compañía operativa real; Industria vende en su propia
+compañía. La identificación del local permanece separada de esas compañías. No
+se decide el flujo por condición jurídica ni se inventan compañías. Cuando
+ambos extremos pertenecen a la misma compañía, esta implementación se detiene
+hasta aprobar su operación interna real.
 
-No presentar estos límites como un flujo Enterprise completo o listo para producción.
+El usuario no necesita confirmar OC u OV manualmente. El servicio crea los dos
+documentos, los vincula al requerimiento y utiliza las acciones estándar de Odoo
+para confirmarlos y preparar sus operaciones de Inventario. La aprobación
+técnica de una OC vinculada, si corresponde, se limita a esa OC dentro del
+servicio; no cambia políticas de compra ni permisos generales del usuario.
 
-## Qué hace el usuario
+El envío es atómico: si falla la configuración, creación, confirmación o algún
+control de integración, se revierte el conjunto. El servicio rechaza efectos
+de otras extensiones que creen facturas o validen existencias en esta fase.
+Confirmar documentos **no acredita cantidades físicas**.
 
-La sucursal abre **Compras → Órdenes → Formulario Web**, o directamente
-`/branch/requisition/new`. Si solo tiene una sucursal asignada aparece bloqueada;
-con varias solo puede elegir entre las autorizadas. No aparece Empresa ni un
-contador. Puede solicitar insumos aunque no haya existencias.
+## Solicitud y fecha
 
-Las categorías siguen siendo Comerciales, Útiles de escritorio, Útiles de
-limpieza y Envases y embalajes. Los productos se ordenan por referencia interna.
-El envío crea, en una sola transacción, un requerimiento, una **OC en borrador
-en la compañía real de la sucursal** y una **OV en borrador en Industria**. En
-Odoo esos borradores se muestran como solicitudes de cotización/cotizaciones.
-Si falla cualquiera de los documentos, no queda una solicitud incompleta.
+La ruta autenticada `/branch/requisition/new` se abre desde
+**Compras → Órdenes → Formulario Web**. Con una sucursal asignada aparece
+bloqueada; con varias, el usuario solo elige entre sus autorizadas. No permite
+escoger libremente otra empresa ni Industria. Se mantiene el usuario real del envío.
 
-El responsable de ventas configurado —el usuario existente de Rolly— revisa la
-OV desde Industria. Ve sucursal, compañía compradora, requerimiento, OC,
-fecha requerida, observaciones, cantidades y términos comerciales estándar.
-El addon no confirma las órdenes, no envía cotizaciones ni genera facturas.
-Los operadores autorizados confirman por el procedimiento normal de Odoo.
+La fecha requerida se propone y limita a **hoy en `America/Lima` + dos días
+calendario**. Si hoy en Perú es 21, el valor inicial es 23 y se admite 23 o una
+fecha posterior. No son días hábiles. El servidor vuelve a comprobarlo al
+enviar, incluyendo POST y creación por RPC; cambiar el reloj o la zona horaria
+del navegador/usuario no reduce el plazo. Un formulario abierto antes de cambiar
+el día puede necesitar una fecha posterior al enviarse. No se reescriben fechas históricas.
 
-Inventario prepara y valida las salidas reales. **Reservado, entregado y recibido
-son cantidades distintas.** Pedir 20 y entregar 15 conserva la demanda original
-de 20 y deja 5 pendientes con su backorder. Las devoluciones físicas reducen lo
-entregado neto, incluso si no se marca la opción de ajuste de facturación.
-La recepción de la compradora requiere su propia validación; no se valida desde
-Industria ni se supone realizada por haber despachado.
+Las categorías admitidas son Comerciales, Útiles de escritorio, Útiles de limpieza
+y Envases y embalajes. No se crean categorías ni se incluyen sus hijas
+automáticamente. Solo se ofrecen productos habilitados explícitamente, activos,
+compartidos, comprables y vendibles para este flujo. Se ordenan por referencia
+interna. La solicitud no requiere stock disponible para existir.
 
-## Configuración, exclusivamente en pruebas
+Se conservan cantidades al cambiar categoría. Cambiar sucursal limpia las
+cantidades para no mezclar compañías. Se validan productos, cantidades finitas,
+redondeo de unidades y duplicados. El token del formulario y las restricciones
+de unicidad impiden generar pares duplicados por reenvío.
 
-Usar compañías, contactos, almacenes, operaciones y usuarios ya existentes.
-No se deduce la compañía operativa de una condición jurídica ni del propietario
-del contacto. No se crean empresas o sucursales para adaptar el flujo.
+## Precios y relaciones comerciales
 
-1. Instalar/actualizar la carpeta completa del addon, con todas sus migraciones,
-   mediante `-i`/`-u alvina_branch_requisition` en una copia de pruebas respaldada.
-   Un reinicio no ejecuta las migraciones. No desinstalar para actualizar.
-2. Con el administrador autorizado, abrir **Compras → Configuración →
-   Abastecimiento de Industria**. Hay una configuración central única, inicialmente
-   desactivada: compañía Industria real, usuario de ventas existente y lista de
-   precios del acuerdo con sucursales. No se elige automáticamente por nombre.
-3. En **Vínculos de sucursales Alviña**, cada sucursal necesita un código único,
-   su contacto existente, compañía solicitante real, Industria como abastecedora,
-   almacén de Industria y operación de recepción de la compañía compradora.
-   La recepción siempre está visible, aunque la opción heredada de cotización
-   esté desmarcada. Con el flujo central activo esa opción heredada no decide
-   qué sucursales participan: todas siguen la configuración central.
-4. Asignar el usuario solicitante exacto y el responsable de ventas/almacenero
-   de Industria a cada vínculo que deban atender. El solicitante mantiene sus
-   compañías actuales; no añadir Industria para eludir la seguridad.
-5. Habilitar los productos deseados. Para la operación entre compañías deben
-   ser bienes físicos compartidos, activos, comprables y vendibles, habilitados
-   para requerimientos y dentro de las categorías admitidas. No se comparten
-   ni duplican automáticamente contactos o productos.
-6. Revisar impuestos, posiciones fiscales, moneda/tipos de cambio, lista de
-   precios, rutas de Inventario y ubicaciones intercompañía reales. Activar solo
-   después de resolver las integraciones de la sección de estado.
+Industria utiliza la **lista de precios configurada**, con los mecanismos
+estándar de moneda, descuentos, impuestos, posición fiscal y redondeo. No se
+sustituye silenciosamente por costo de inventario ni tarifa de proveedor.
+La OC toma el precio neto efectivo de venta convertido a su moneda y adaptado
+a los impuestos de compra. No se fija una tasa de IGV en el código.
 
-El cliente comercial de la OV es el **contacto de la compañía compradora**, y el
-proveedor de la OC es el **contacto de Industria**. La identidad operativa de la
-sucursal se conserva separadamente en el vínculo, documentos, picking y PDF.
-El contacto operativo de la sucursal puede seguir privado de su compañía. No
-se fuerza a compartirlo. Los contactos de las compañías sí deben poder usarse
-en sus respectivos documentos estándar.
+El cliente de la OV es el contacto comercial de la compañía compradora y el
+proveedor de la OC es el contacto comercial de Industria. El contacto operativo
+de la sucursal se identifica aparte. No se comparten, duplican ni modifican
+contactos o productos automáticamente. Deben existir país fiscal real, moneda,
+tipos de cambio, impuestos y contactos disponibles en las compañías correspondientes.
 
-Odoo configura propiedades de tránsito entre los contactos de compañías. Se
-probó que el destino de la salida de Industria y el origen de la recepción de
-la compradora coincidan. No se inventa ni escribe una ubicación de tránsito.
-Dirección de entrega/facturación y recepción quedan protegidas en las órdenes
-vinculadas. Cambiar una recepción con historial del nuevo flujo exige migración.
+Los precios e importes solicitados se capturan al crear la solicitud. No se
+revalorizan los históricos con precios actuales. No hay una sincronización
+general de ediciones posteriores entre ambos documentos. No se envían facturas
+ni se crean automáticamente por este addon.
 
-## Precios y PDF
+## Logística y cantidades físicas
 
-El nuevo flujo calcula la OV con la lista configurada y los mecanismos estándar
-de descuentos, impuestos, posición fiscal, moneda y redondeo. No usa el precio
-público como sustituto silencioso, el costo ni una tarifa de proveedor.
-La OC inicial toma el precio neto efectivo de venta, convertido a su moneda y
-adaptado a los impuestos de compra de su compañía. No se codifica una tasa de
-IGV. Las dos cotizaciones requieren revisión fiscal y comercial. Cambios
-posteriores de precio en un borrador no se sincronizan automáticamente al otro.
+**Ventas → Órdenes → Pedidos de sucursales** muestra las ventas vinculadas a
+abastecimientos. Logística prepara la salida de Inventario de la OV, introduce
+las cantidades realmente enviadas y valida el despacho. Si despacha menos,
+debe conservar el faltante como operación pendiente; una operación configurada
+para cancelar siempre el saldo se rechaza para este caso parcial.
 
-El menú **Imprimir** de la OV y del requerimiento ofrece el PDF A4
-**ORDEN DE DESPACHO VALORIZADA — INDUSTRIA**. Incluye referencias, sucursal,
-compañías, fechas, códigos, unidades, solicitado, reservado, entregado neto,
-recibido, pendiente, precios, impuestos e importes solicitados/entregados/pendientes.
-Solo usa el logo real configurado, si existe. Puede imprimirse antes o después
-de entregar; una reserva nunca se presenta como entrega. No acredita facturación.
-El PDF refleja las condiciones actuales de la OV, no un comprobante fiscal ni
-una copia legal inmutable de cada impresión.
+La salida real genera una guía por picking, sin emitir dos guías para el mismo
+despacho. Las siguientes salidas parciales tienen sus propias guías. La reserva
+no se presenta como entrega ni la entrega como recepción. Los movimientos
+reales y sus devoluciones determinan las cantidades físicas netas.
 
-Los faltantes pueden permanecer pendientes para otro despacho. Para cerrarlos,
-un almacenero asignado cancela primero las operaciones abiertas del producto en
-Inventario y usa **Cerrar saldo con motivo**. Registra cantidad, motivo, usuario
-y fecha en un historial inmutable. No reduce la cantidad original ni crea una
-entrega ficticia, y tampoco cancela movimientos automáticamente.
+La sucursal abre **Compras → Órdenes → Guías internas y recepción**, revisa su
+guía e introduce lo realmente recibido en **Confirmar recepción real**. La misma
+acción valida la recepción pendiente existente de la OC y registra usuario,
+fecha y conformidad. No exige un segundo trámite manual de Inventario ni da
+al solicitante acceso genérico al Inventario de otras compañías.
 
-## Seguridad
+Se permite una recepción menor que lo despachado con motivo obligatorio; no se
+permite recibir más de lo documentado en esa guía. El asistente está limitado
+a una recepción real pendiente de **un paso**, sin lotes ni números de serie.
+Si la operación necesita datos o rutas adicionales se detiene; no inventa
+lotes, movimientos o confirmaciones. Si no llegó ninguna unidad, se registra
+una recepción con diferencias y motivo obligatorio, sin crear movimientos ni
+validar una entrada vacía.
 
-La solicitud se crea con el usuario real. El puente privado valida su sucursal,
-compañía permitida y configuración antes de crear exclusivamente las contrapartes
-con elevación acotada. El navegador no puede elegir compañías, precios, estados
-o vínculos comerciales. Token, bloqueo de fila y unicidad evitan duplicados.
+Ejemplo: pedido de 10, despacho de 8, recepción de 7. Quedan **2 pendientes de
+despachar** y **1 de diferencia de recepción**. Esa diferencia no vuelve a
+descontar stock de Industria ni se suma automáticamente al pendiente de
+despacho. Si recibe las 8 enviadas, la recepción de esa guía es conforme aunque
+queden 2 del pedido sin despachar. Resolver una diferencia no crea una factura
+ni una reposición automática.
 
-Las reglas estándar de compañías y roles de Compras/Ventas/Inventario siguen
-vigentes. Se añaden restricciones de asignación para las órdenes vinculadas;
-los documentos ajenos al addon conservan su flujo. Rolly necesita sus permisos
-de ventas ya existentes en Industria y asignación a las sucursales. El rol
-Alviña: Almacenero se necesita además para el consolidado/cierre de saldos.
-No se añaden compañías ni roles automáticamente a ningún usuario.
+## Dos informes distintos
 
-Un Rolly solo de Industria puede consultar su OV y su PDF autorizado sin obtener
-acceso general a las OC de las compradoras. Los enlaces a documentos conservan
-las ACL estándar. El PDF valida acceso y asignación, y entrega a QWeb únicamente
-una proyección de datos autorizados, sin registros `sudo()` ni costos de inventario.
+La nueva **Guía interna valorizada por despacho** conserva la identificación,
+cantidades, precios, descuentos, impuestos y valores al emitirse. Modificar un
+nombre o precio posterior no reescribe el despacho. Una confirmación de
+recepción añade su propio registro inmutable con las cantidades recibidas y
+diferencias. El PDF separa los productos de esa salida del saldo del pedido
+capturado al emitir: solicitado, despachado neto acumulado y pendiente de
+despachar. La guía es un PDF interno: no es una factura ni una guía SUNAT.
+
+Se conserva el informe anterior **Orden de despacho valorizada — Industria**
+desde la OV/requerimiento para consultar el resumen de pedido, reservas,
+entregado neto, recibido y pendientes. Ese resumen refleja el estado consultado;
+no sustituye la guía inmutable de una salida concreta.
+
+## Seguridad y sustitución de personal
+
+El grupo **Alviña: Logística de Industria** atiende todas las sucursales cuya
+abastecedora sea una compañía ya permitida y seleccionada por ese usuario. No
+exige añadirle cada vínculo de sucursal ni que sea el vendedor de origen.
+Incluye los permisos estándar de ventas de documentos propios y los del
+almacenero; las reglas del addon delimitan el ámbito comercial compartido.
+
+Para este rol quedan fuera las ventas comunes, sus líneas y el análisis de
+ventas, incluso si también pertenece a grupos comerciales de todos los
+documentos o administrador de Ventas. Una URL directa, exportación o agregado
+no sustituye esas comprobaciones. No puede crear o duplicar manualmente una
+OV común. Los usuarios comerciales que no tienen este rol mantienen sus
+permisos anteriores. El superusuario técnico conserva su capacidad administrativa.
+
+Los solicitantes mantienen sus compañías actuales y su asignación explícita al
+vínculo. El rol anterior **Alviña: Almacenero** mantiene sus reglas de asignación.
+**Almacenero autorizado**, de otros desarrollos, no reemplaza al grupo nuevo.
+Tener permisos administrativos de configuración no concede por sí solo acceso
+a todos los requerimientos. Tampoco se eliminan otros permisos previos de
+Contabilidad, Compras o Inventario al asignar el nuevo rol.
+
+El responsable de ventas es un usuario existente configurado por el administrador.
+Si está activo, debe ser interno, tener Industria autorizada y acceso a Ventas.
+Si falta o está archivado, solo se resuelve automáticamente cuando existe
+exactamente un usuario activo del nuevo rol con Industria ya autorizada. Con
+cero o varios candidatos se exige una selección explícita. No hay nombres
+personales codificados ni se modifican órdenes históricas al sustituir personal.
+
+La elevación interna del puente y de la recepción está acotada al documento
+validado tras comprobar actor, sucursal, compañía, guía y operaciones. El cliente
+no puede asignarse precios, compañías, estados, vínculos o cantidades físicas
+con campos o contextos manipulados.
 
 ## Consolidado e históricos
 
-Se conserva **Compras → Órdenes → Consolidado de compras**, para almaceneros.
-Esta actualización lo vuelve a activar conforme a la última instrucción. No
-crea una aplicación, menú raíz ni nuevas compras externas.
-
-Agrupa primero la demanda pendiente por producto, almacén e Industria y conserva
-el desglose de sucursales. Excluye requerimientos y OV cancelados. Usa stock libre,
-entradas confirmadas y reservas reales de estas solicitudes dentro del almacén.
-Las reservas propias se reconocen una sola vez: confirmar la OV no inventa una
-nueva falta por haber reducido `free_qty`. Las reservas de otros pedidos siguen
-indisponibles. No suma OC y movimientos entrantes por duplicado.
+Se conserva **Compras → Órdenes → Consolidado de compras** para el rol de
+almacenero. Agrupa demanda pendiente por producto, almacén y abastecedora,
+manteniendo el desglose por sucursal. No crea compras externas ni mueve stock.
+Reconoce las reservas propias una sola vez y conserva indisponibles las de
+otros pedidos. No suma OC y movimientos entrantes por duplicado.
 
 La sugerencia es `max(pendiente − reserva propia reconocida − max(stock libre,0)
 − max(entradas,0),0)`. La reserva reconocida se limita por demanda y existencias
 físicas/reservas del almacén. Es una consulta, no una asignación exclusiva de
-entradas ni un motor de aprovisionamiento con ventanas de tiempo.
+entradas ni un motor de aprovisionamiento por ventanas de tiempo.
 
-La migración `19.0.2.0.0` conserva lo atendido histórico en
-`legacy_qty_supplied` antes de activar los cálculos de Inventario. No genera OC,
-OV, movimientos ni precios retroactivos. Mantiene compañías, usuarios y documentos
-anteriores. No convierte historial mal asignado a otra compañía. La configuración
-central no se crea/activa automáticamente: el modo anterior sigue disponible
-hasta que se revise y active expresamente el nuevo flujo.
+Se conserva la migración 19.0.2.0.0, que protege lo atendido anterior en
+`legacy_qty_supplied`. La versión 19.0.3.0.0 no convierte requerimientos antiguos
+en nuevas parejas OC/OV ni crea guías históricas, precios, compañías o
+movimientos retroactivos. La configuración central no se crea ni activa sola.
+Identificar el commit instalado antes de actualizar: la variante alternativa
+con `keeper_ids` requiere su propio mapeo.
 
-## Aceptación pendiente
+## Integración pendiente
 
-Antes de autorizar producción: probar la copia real con Enterprise, tema,
-addons privados, rutas, valuación comercial, impuestos y permisos existentes;
-resolver el adaptador nativo y la operación de sucursales dentro de Industria;
-confirmar las direcciones operativas reales si varias sucursales comparten una
-compañía compradora; probar la regresión de `/portal/production/new` sin editarlo.
-Véase [TESTING.md](TESTING.md) para la evidencia reproducible actual.
+El automatismo Enterprise instalado, la misma compañía en ambos extremos y
+productos que disparen fabricación privada siguen bloqueados. La edición de
+líneas del módulo privado de ventas requiere una integración comprobada.
+Detalles y evidencia: [NATIVE_INTERCOMPANY.md](NATIVE_INTERCOMPANY.md) y
+[TESTING.md](TESTING.md). No se ha autorizado ni ejecutado despliegue en producción.

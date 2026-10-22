@@ -11,7 +11,9 @@ class TestDispatchReport(SupplyCompanyFixture, TransactionCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.supply_company.account_fiscal_country_id = cls.env.ref('base.pe')
+        (cls.supply_company | cls.branch_company | cls.second_company).write({
+            'account_fiscal_country_id': cls.env.ref('base.pe').id,
+        })
         cls.keeper.group_ids = [Command.link(cls.env.ref('sales_team.group_sale_salesman').id)]
         cls.shared_product.write({
             'list_price': 2.0, 'purchase_ok': True, 'sale_ok': True,
@@ -50,7 +52,6 @@ class TestDispatchReport(SupplyCompanyFixture, TransactionCase):
         sale = record.sudo().sale_order_id.with_company(self.supply_company)
         self.env['stock.quant']._update_available_quantity(
             self.shared_product, self.warehouse.lot_stock_id, 100)
-        sale.action_confirm()
         picking = sale.picking_ids.filtered(lambda item: item.state != 'cancel')
         self.assertEqual(len(picking), 1)
         picking.move_ids.quantity = quantity
@@ -60,7 +61,7 @@ class TestDispatchReport(SupplyCompanyFixture, TransactionCase):
         record.line_ids.invalidate_recordset()
         return picking
 
-    def test_draft_pdf_has_requested_value_and_zero_delivered(self):
+    def test_confirmed_documents_have_requested_value_and_zero_delivered(self):
         record = self._dispatch_request()
         payload = self._payload(record)
         self.assertEqual(payload['branch'], self.branch.name)
@@ -165,7 +166,7 @@ class TestDispatchReport(SupplyCompanyFixture, TransactionCase):
         self.assertIn('Total valorizado'.encode(), html)
         self.assertIn(self.branch.name.encode(), html)
         self.assertNotIn(b'standard_price', html)
-        self.assertEqual(sale.state, 'draft')
+        self.assertEqual(sale.state, 'sale')
         for model, count in counts_before.items():
             self.assertEqual(self.env[model].sudo().search_count([]), count)
 

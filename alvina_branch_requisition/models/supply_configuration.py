@@ -15,7 +15,9 @@ class SupplyConfiguration(models.Model):
         help='Seleccione la compañía real que abastece a todas las sucursales.')
     sales_user_id = fields.Many2one(
         'res.users', string='Responsable de ventas de Industria',
-        help='Seleccione a Rolly o al responsable existente. Sus permisos no se modifican.')
+        help='Seleccione al responsable existente. Si está ausente o archivado, se usará '
+             'el único usuario activo de Logística de Industria autorizado en esa compañía. '
+             'No se modifican permisos ni asignaciones de compañías.')
     pricelist_id = fields.Many2one(
         'product.pricelist', string='Lista de precios de Industria',
         help='Lista existente, activa, compartida o de Industria, con una moneda activa.')
@@ -63,19 +65,49 @@ class SupplyConfiguration(models.Model):
                 'verificado antes de activar este flujo para evitar compras o ventas duplicadas.'))
         return True
 
+    def _get_sales_responsible(self):
+        """Resolve an explicit assignee, or one unambiguous authorized successor.
+
+        Resolution never changes the saved selection or a user's companies. An
+        active but invalid selection is a configuration error, not a reason to
+        silently move responsibility to someone else.
+        """
+        self.ensure_one()
+        configuration = self.sudo()
+        selected = configuration.sales_user_id.with_context(active_test=False).exists()
+        if selected and selected.active:
+            if (selected.share or configuration.company_id not in selected.company_ids
+                    or not selected.has_group('sales_team.group_sale_salesman')):
+                raise ValidationError(_(
+                    'El responsable seleccionado debe ser un usuario interno activo con '
+                    'acceso existente a Industria y permiso de Ventas. Revise su selección; '
+                    'no se amplían sus permisos automáticamente.'))
+            return selected
+        logistics = self.env.ref('alvina_branch_requisition.group_industry_logistics')
+        candidates = self.env['res.users'].sudo().search([
+            ('active', '=', True), ('share', '=', False),
+            ('company_ids', 'in', configuration.company_id.ids),
+            ('all_group_ids', 'in', logistics.ids),
+        ])
+        candidates = candidates.filtered(
+            lambda user: user.has_group('sales_team.group_sale_salesman'))
+        if len(candidates) != 1:
+            raise ValidationError(_(
+                'Seleccione un responsable activo de ventas de Industria. Cuando no hay '
+                'un responsable activo seleccionado, debe existir exactamente un usuario '
+                'activo de Logística de Industria autorizado en esa compañía; '
+                'se encontraron %(count)s.', count=len(candidates)))
+        return candidates
+
     @api.constrains('enabled', 'company_id', 'sales_user_id', 'pricelist_id')
     def _check_configuration(self):
         for rec in self:
             if not rec.enabled:
                 continue
             rec._assert_supported()
-            user = rec.sudo().sales_user_id
-            if (not user or not user.active or user.share
-                    or rec.company_id not in user.company_ids
-                    or not user.has_group('sales_team.group_sale_salesman')):
-                raise ValidationError(_(
-                    'El responsable debe ser un usuario interno activo con acceso existente '
-                    'a Industria y permiso de Ventas. No se amplían sus permisos automáticamente.'))
+            rec._get_sales_responsible()
+            if not rec.company_id.account_fiscal_country_id:
+                raise ValidationError(_('Configure el país fiscal real de Industria antes de activar el abastecimiento.'))
             pricelist = rec.sudo().pricelist_id
             if (not pricelist or not pricelist.active
                     or pricelist.company_id and pricelist.company_id != rec.company_id
@@ -98,7 +130,9 @@ class SupplyConfiguration(models.Model):
                 'Configure una sucursal activa, su identificación obligatoria y su contacto existente.'))
         if branch.supply_company_id != rec.company_id:
             raise ValidationError(_('Todas las sucursales deben solicitar sus insumos a Industria.'))
-        if rec.sales_user_id.id not in branch.user_ids.ids:
+        responsible = rec._get_sales_responsible()
+        if (responsible.id not in branch.user_ids.ids
+                and not responsible.has_group('alvina_branch_requisition.group_industry_logistics')):
             raise ValidationError(_('Asigne al responsable de ventas de Industria a esta sucursal.'))
         if (not branch.warehouse_id.active
                 or branch.warehouse_id.company_id != rec.company_id):
@@ -107,6 +141,8 @@ class SupplyConfiguration(models.Model):
             raise ValidationError(_(
                 'Caso interno pendiente de aprobación: esta sucursal comparte compañía con Industria. '
                 'No se crearán compras ni ventas interempresa consigo misma.'))
+        if not branch.company_id.account_fiscal_country_id:
+            raise ValidationError(_('Configure el país fiscal real de la compañía solicitante antes de enviar el requerimiento.'))
         # Use the real buyer company's commercial partner. Its standard
         # intercompany stock properties also identify the shared transit path.
         # The branch contact remains its separate operational identification.

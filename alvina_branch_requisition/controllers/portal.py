@@ -1,7 +1,7 @@
 import json
 import secrets
 from psycopg2 import IntegrityError
-from odoo import http, fields, Command, _
+from odoo import http, Command, _
 from odoo.http import request
 from odoo.exceptions import AccessError, ValidationError
 from ..models.validation import CATEGORIES, natural_key, quantity
@@ -58,7 +58,8 @@ class RequisitionPortal(http.Controller):
                 'uom': p.uom_id.name, 'rounding': p.uom_id.rounding} for p in products]
         return request.render('alvina_branch_requisition.form', {
             'branches': branches, 'categories': CATEGORIES, 'catalogs': json.dumps(catalogs),
-            'submission_key': token, 'error': error, 'today': fields.Date.context_today(request.env.user)})
+            'submission_key': token, 'error': error,
+            'minimum_required_date': request.env['alvina.branch.request']._minimum_required_date()})
 
     @http.route('/branch/requisition/new', type='http', auth='user', website=True, methods=['GET'])
     def new(self, **kw):

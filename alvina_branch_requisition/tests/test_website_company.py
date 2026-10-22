@@ -9,6 +9,7 @@ from odoo.exceptions import AccessError
 from odoo.tests import HttpCase, tagged
 
 from .test_supply_companies import SupplyCompanyFixture
+from ..models.dates import minimum_required_date
 
 
 @tagged('post_install', '-at_install')
@@ -33,7 +34,7 @@ class TestWebsiteCompany(SupplyCompanyFixture, HttpCase):
         self.assertIsNotNone(soup.select_one('#alvina-request-form'))
         values = {node['name']: node.get('value', '')
                   for node in soup.select('#alvina-request-form input[name]')}
-        values.update(required_date=str(fields.Date.today()),
+        values.update(required_date=str(minimum_required_date(fields.Datetime.now())),
                       lines=json.dumps([{'id': self.product.id, 'qty': '3'}]))
         return soup, values
 

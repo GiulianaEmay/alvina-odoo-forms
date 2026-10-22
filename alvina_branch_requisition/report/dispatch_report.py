@@ -16,7 +16,8 @@ class DispatchReportLayout(models.Model):
     def _get_layout(self):
         if len(self) == 1 and self.report_name in (
                 'alvina_branch_requisition.dispatch_request',
-                'alvina_branch_requisition.dispatch_sale'):
+                'alvina_branch_requisition.dispatch_sale',
+                'alvina_branch_requisition.dispatch_note'):
             # This A4 report already carries all its styles and a data-URI logo.
             # It does not need an HTTP asset round trip while rendering a PDF.
             return self.env.ref('alvina_branch_requisition.dispatch_minimal_layout')
@@ -33,7 +34,7 @@ class BranchRequestDispatch(models.Model):
         # Recheck membership even under report rendering contexts; a report
         # action must never turn a guessed request id into a commercial export.
         request = self.sudo()
-        if not self.env.su and self.env.uid not in request.branch_id.user_ids.ids:
+        if not self.env.su and not self.branch_id._alvina_user_can_attend_supply():
             raise AccessError(_('No tiene acceso al despacho de esta sucursal.'))
         sale = request.sale_order_id
         if sale and (sale.alvina_branch_request_id != request
@@ -184,7 +185,8 @@ class DispatchSaleReport(models.AbstractModel):
             request = sale.sudo().alvina_branch_request_id
             if not request or request.sale_order_id != sale:
                 raise UserError(_('La venta no tiene un requerimiento Alviña vinculado.'))
-            if not self.env.su and self.env.uid not in request.branch_id.user_ids.ids:
+            if not self.env.su and not request.branch_id.with_env(
+                    self.env)._alvina_user_can_attend_supply():
                 raise AccessError(_('No tiene acceso al despacho de esta sucursal.'))
             documents.append(dict(request._alvina_dispatch_payload(), report_id=sale.id))
         return {'doc_ids': sales.ids, 'doc_model': 'sale.order', 'documents': documents}

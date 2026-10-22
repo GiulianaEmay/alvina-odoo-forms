@@ -15,7 +15,7 @@ category=env['product.category'].create({'name':'Comerciales'})
 product=env['product.product'].create({'name':'Alvina uninstall sentinel product','categ_id':category.id,'is_storable':True,'alvina_requisition_enabled':True})
 env['stock.quant']._update_available_quantity(product,warehouse.lot_stock_id,7)
 branch=env['alvina.branch.binding'].create({'resource_ref':f'res.partner,{partner.id}','company_id':company.id,'warehouse_id':warehouse.id,'user_ids':[Command.set(user.ids)]})
-record=env['alvina.branch.request'].with_user(user).create({'branch_id':branch.id,'required_date':fields.Date.today(),'submission_key':str(uuid4()),'line_ids':[Command.create({'product_id':product.id,'product_qty':3})]})
+record=env['alvina.branch.request'].with_user(user).create({'branch_id':branch.id,'required_date':env['alvina.branch.request']._minimum_required_date(),'submission_key':str(uuid4()),'line_ids':[Command.create({'product_id':product.id,'product_qty':3})]})
 partner_id,product_id,category_id=partner.id,product.id,category.id
 purchase_ids=env['purchase.order'].search([]).ids
 move_ids=env['stock.move'].search([]).ids

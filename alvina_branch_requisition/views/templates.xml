@@ -27,7 +27,7 @@
                         </div>
                         <div class="col-12 col-md-4 form-group mb-3">
                             <label for="alvina-date" class="form-label">Fecha requerida</label>
-                            <input id="alvina-date" type="date" name="required_date" required="required" t-att-min="today" class="form-control"/>
+                            <input id="alvina-date" type="date" name="required_date" required="required" t-att-min="minimum_required_date" t-att-value="minimum_required_date" class="form-control"/>
                         </div>
                     </div>
                     <div class="mt-4">
