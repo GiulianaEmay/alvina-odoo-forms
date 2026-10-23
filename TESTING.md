@@ -1,5 +1,12 @@
 # Validación — 19.0.3.1.0
 
+## Revisión conjunta con POS del ZIP operativo
+
+El resultado conjunto actual de `main` es **256 pruebas Odoo correctas**: 191 de
+sucursales, 23 de POS y 42 del QR recibido. Ver [el informe del ZIP](ZIP_REVIEW_2026-10-23.md)
+para sus casos, la actualización del esquema POS y los límites de Enterprise.
+El resultado de 233 que sigue corresponde a sucursales + QR antes de añadir POS.
+
 ## Alcance
 
 Las comprobaciones utilizan Odoo **Community 19** oficial, revisión

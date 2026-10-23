@@ -39,6 +39,6 @@ jobs:
         run: |
           python .odoo-runtime/odoo-bin --addons-path="$PWD/.odoo-runtime/addons,$PWD" \
             --data-dir=/tmp/alvina-odoo-data --db_host=/tmp/alvina-ci-pg --db_user=odoo_test \
-            -d alvina_ci_test -i alvina_branch_requisition \
-            --test-enable --test-tags=/alvina_branch_requisition --stop-after-init \
+            -d alvina_ci_test -i alvina_branch_requisition,alvina_pos_comprobantes \
+            --test-enable --test-tags=/alvina_branch_requisition,/alvina_pos_comprobantes --stop-after-init \
             --without-demo --http-interface=127.0.0.1 --http-port=8079

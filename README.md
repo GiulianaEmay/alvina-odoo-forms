@@ -5,6 +5,10 @@ Industria atiende desde **Ventas**. Odoo vincula y confirma la OC y la OV para
 preparar Inventario. Las únicas confirmaciones operativas son el despacho real
 de Logística y la recepción real de la sucursal. No genera facturas.
 
+El repositorio incluye además `alvina_pos_comprobantes`, con su propio flujo
+opcional de Boleta/Factura al terminar un ticket POS. Consultar su
+[guía de uso](alvina_pos_comprobantes/README.md) y [revisión del ZIP](ZIP_REVIEW_2026-10-23.md).
+
 La versión vigente se mantiene en **`main`**. Usar esa rama para transferir el
 módulo completo a Odoo; incluye las correcciones anteriores de Logística,
 manifest, integración interempresa y compatibilidad QR. Las ramas anteriores
@@ -14,6 +18,7 @@ Publicar en GitHub no instala ni actualiza Odoo.
 
 ## Documentación actual
 
+- [Revisión del ZIP, POS Boleta/Factura y actualización de ambas apps](ZIP_REVIEW_2026-10-23.md).
 - [Qué fallaba, qué se corrigió y cómo completar la puesta en marcha](RELEASE_2026-10-23.md).
 - [Flujo y configuración para administrador, sucursal y Logística](OPERATING_FLOW.md).
 - [Diseño funcional, precios, seguridad e históricos](INTERCOMPANY_FLOW.md).
