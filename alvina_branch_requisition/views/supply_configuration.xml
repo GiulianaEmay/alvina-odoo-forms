@@ -24,9 +24,10 @@
                         Elija registros existentes. Esta configuración no crea empresas ni amplía permisos.
                     </div>
                     <div class="alert alert-warning" role="status">
-                        Si está instalado el automatismo interempresa de Odoo, se requiere un adaptador
-                        verificado para evitar documentos duplicados. Al enviar un requerimiento,
+                        Si está instalado el automatismo interempresa de Odoo, configure Industria para
+                        generar su venta a partir de la compra de la sucursal. Al enviar un requerimiento,
                         Odoo genera y confirma la compra y la venta para preparar sus operaciones de Inventario.
+                        Si no se obtiene una única pareja válida, el envío se revierte.
                         Las cantidades enviadas y recibidas se confirman por separado. No se generan facturas.
                     </div>
                     <group>

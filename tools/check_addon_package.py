@@ -245,6 +245,22 @@ def check_package(addon):
                         field.get('ref') if kind == 'ref' else (field.text or '').strip())
                     if actual != expected:
                         errors.append('Enlace XML de versión 3 ausente o incorrecto: ' + identifier + '.' + name)
+    v31_source = 'native_supply' in imported or (
+        'stock.move', 'alvina_branch_request_line_id') in field_calls
+    if v31_source and version < (19, 0, 3, 1):
+        errors.append('Código de integración nativa/QR requiere manifest 19.0.3.1.0 o posterior.')
+    if v31_source or version >= (19, 0, 3, 1):
+        for module in ('native_supply', 'supply_context'):
+            if module not in imported:
+                errors.append('Falta importar el adaptador transaccional: ' + module)
+        if 'alvina_request_line_id' in fields_by_model.get('stock.move', set()):
+            errors.append('stock.move.alvina_request_line_id colisiona con el módulo QR.')
+        if ('stock.move', 'alvina_branch_request_line_id') not in field_calls:
+            errors.append('Falta el enlace separado stock.move.alvina_branch_request_line_id.')
+        if 'action_send_to_industry' not in methods_by_model.get('alvina.branch.request', set()):
+            errors.append('Falta la acción de envío de requerimientos pendientes.')
+        if not (addon / 'migrations/19.0.3.1.0/pre-migration.py').is_file():
+            errors.append('Falta la migración de conservación de enlaces QR/sucursales.')
     return errors
 
 

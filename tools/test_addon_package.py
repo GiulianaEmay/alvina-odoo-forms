@@ -114,7 +114,18 @@ class AddonPackageTests(unittest.TestCase):
         (self.addon / '__manifest__.py').write_text(repr(manifest), encoding='utf-8')
         self._replace('models/__init__.py', 'from . import logistics', '')
         self._replace('models/__init__.py', 'from . import dispatch', '')
-        self.assertEqual(check_package(self.addon), [])
+        errors = check_package(self.addon)
+        self.assertFalse(any('módulo obligatorio de versión 3:' in error for error in errors), errors)
+        self.assertTrue(any('integración nativa/QR' in error for error in errors), errors)
+
+    def test_native_files_present_but_not_imported_are_not_a_complete_delivery(self):
+        self._replace('models/__init__.py', 'from . import supply_context, native_supply', '')
+        errors = check_package(self.addon)
+        self.assertTrue(any('adaptador transaccional: native_supply' in error for error in errors), errors)
+
+    def test_missing_collision_migration_is_rejected(self):
+        (self.addon / 'migrations/19.0.3.1.0/pre-migration.py').unlink()
+        self.assertTrue(any('migración de conservación' in error for error in check_package(self.addon)))
 
     def test_old_manifest_cannot_disable_checks_for_loaded_version_three_sources(self):
         manifest = self._manifest()

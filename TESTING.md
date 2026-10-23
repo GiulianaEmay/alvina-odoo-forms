@@ -1,4 +1,4 @@
-# Validación — 19.0.3.0.0
+# Validación — 19.0.3.1.0
 
 ## Alcance
 
@@ -7,12 +7,76 @@ Las comprobaciones utilizan Odoo **Community 19** oficial, revisión
 **desechables**. No prueban ni modifican producción. No se dispone del runtime
 Enterprise ni de la pila privada instalada de Alviña.
 
-Resultado final de esta revisión: **176 pruebas Odoo, cero fallos, cero errores
-y ninguna omisión**, más **25 pruebas Python** de validación/paquete y **5 DOM**.
-Se verificaron también instalación limpia, reinicio, actualización real desde
-19.0.2.0.0 y el escenario HTTP/PDF descrito abajo. Los conteos de 117 pruebas de
-las secciones históricas corresponden a 19.0.2.0.0. No se suman ejecuciones
-parciales para presentarlas como una suite completa.
+Resultado final de 19.0.3.1.0: **233 pruebas Odoo en una ejecución conjunta,
+cero fallos, cero errores y ninguna omisión**: 191 de sucursales (incluidas 15 del
+contrato nativo) y 42 del módulo QR facilitado. Además: **27 pruebas Python** de
+validación/paquete y **5 DOM**, todas correctas. Chromium real y PDF binario.
+
+La ejecución final está en `/tmp/alvina-combined-v31-final-tests.log`, base local
+`alvina_native_qr_compat_test`, con `0 failed, 0 error(s) of 233 tests`. El primer
+intento de integración local encontró dependencias gráficas de ReportLab ausentes;
+se instaló `rl-renderPM` en el entorno de pruebas y se repitió la suite completa.
+Una ejecución anterior de navegador encontró un filestore local incompleto;
+se restauraron los archivos del fixture antes de la validación final.
+
+Los conteos históricos de 176 pruebas corresponden a 19.0.3.0.0, y los de 117 a
+19.0.2.0.0; no se suman ejecuciones parciales para presentar una suite completa.
+No se ejecuta ni certifica el motor Enterprise real, que no viene en el ZIP.
+
+## Evidencia específica de 19.0.3.1.0
+
+- Adaptador: una sola OC y la OV observada del motor nativo; creación anidada o
+  cabecera/líneas separadas; confirmación nativa o técnica; impuestos incluidos,
+  precios y responsable conservados; aprobación técnica de dos pasos limitada
+  a la OC del requerimiento. No amplía compañías ni permisos.
+- Fallos: ausencia de OV, duplicado, empresa/cantidad/líneas incorrectas,
+  facturación, compra inversa o precios alterados revierten todo el envío.
+  Las creaciones ordinarias quedan fuera de la capacidad privada.
+- Pendientes: el solicitante original puede enviar su requerimiento anterior
+  una vez, sin cambiar referencias, fechas o demanda; se conservan intactos si
+  falla la integración. Otro usuario no puede enviarlo.
+- Inventario nativo: 10 pedidas, 8 despachadas en una guía valorizada en 28,
+  7 recibidas, 2 pendientes de despacho y una diferencia de recepción;
+  sin doble descuento de stock ni facturas. El precio del fixture es 3.5.
+- Coexistencia QR: sus 42 pruebas originales ejecutan reservas, entrega real,
+  lectura QR/Code128, cancelación, autorizaciones, cantidades y aislamiento,
+  mientras sucursales está instalado. La suite de sucursales también se ejecutó
+  completa con QR presente. El código de negocio QR no se modificó.
+- Migración con historia: una solicitud QR se entregó realmente en una copia
+  local (cinco unidades). Tras ejecutar `-u alvina_branch_requisition` desde una
+  marca de versión predecesora se conservaron IDs, líneas, estado, cantidades
+  y stock. Los dos campos ORM y sus claves foráneas apuntan a sus modelos
+  respectivos. Ante una asociación producto/solicitud deliberadamente ambigua,
+  el pre-migrador rechazó el caso sin borrar los movimientos.
+- Instalación limpia: `alvina_native_clean_v31`, versión 19.0.3.1.0 instalada,
+  registro cargado y columnas/claves verificadas. Log
+  `/tmp/alvina-native-clean-install.log`.
+
+Las evidencias de historia están en `/tmp/alvina-qr-history-before.json`,
+`/tmp/alvina-qr-history-after.json`, `/tmp/alvina-qr-history-upgrade.log` y
+`/tmp/alvina-qr-history-verify.log`. El fixture marcó explícitamente su versión
+instalada como predecesora para ejercitar la migración sobre historia QR real;
+no es una copia de la base de producción ni certifica todos sus datos históricos.
+
+Para descubrir la suite QR del ZIP, se copió únicamente ese módulo a
+`/tmp/alvina-qr-compat-addons`, se renombró su carpeta `test/` a `tests/` y se
+importó desde su `__init__.py`. En su fixture se activó el tipo interno que
+necesita el departamento de pruebas. Se conservaron sus 42 pruebas y todos sus
+modelos originales. Esta adaptación es solo del runtime de pruebas; no debe
+copiarse sobre el módulo operativo.
+
+Comando conjunto, con el entorno PDF ya preparado:
+
+```bash
+/ruta/venv/bin/python /ruta/odoo/odoo-bin \
+  --addons-path=/ruta/odoo/addons,/ruta/repositorio,/tmp/alvina-qr-compat-addons \
+  --data-dir=/tmp/alvina-qr-compat-data \
+  --db_host=/tmp/alvina-ci-pg --db_user=odoo_test \
+  -d alvina_native_qr_compat_test \
+  -u alvina_branch_requisition,alvina_stock_request \
+  --test-enable --test-tags=/alvina_branch_requisition,/alvina_stock_request \
+  --stop-after-init --http-interface=127.0.0.1 --http-port=8090
+```
 
 ## Cobertura nueva
 
@@ -45,8 +109,11 @@ parciales para presentarlas como una suite completa.
   migraciones, consolidación sin descontar reservas/stock dos veces, devoluciones,
   inmutabilidad e históricos. La confirmación comercial no activa facturación.
 
-La cobertura de un guardia de integración mediante mocking confirma que bloquea;
-**no demuestra compatibilidad con Enterprise o con el módulo privado**.
+Las 15 pruebas del adaptador simulan la salida ORM del motor nativo sobre
+Inventario/Compras/Ventas Community reales. **No ejecutan Enterprise**. La pila
+privada completa requiere módulos Enterprise ausentes del ZIP; sus overrides
+conocidos se revisaron estáticamente y los efectos de fabricación se bloquean.
+Todavía debe verificarse una OC→OV con la regla/usuario de la copia real.
 
 ## Runtime y evidencias locales
 
@@ -56,7 +123,7 @@ socket `/tmp/alvina-ci-pg` y rol `odoo_test` sin superusuario. Se utilizan Chrom
 real y wkhtmltopdf con Qt parcheado. No se incluyen credenciales operativas en
 Git; los probes contienen únicamente las credenciales sintéticas de su fixture.
 
-La suite final completa ejecutada con `-u` está en
+La suite histórica de 19.0.3.0.0 ejecutada con `-u` está en
 `/tmp/alvina-logistics-publication-tests.log`; su resumen es `0 failed, 0
 error(s) of 176 tests`. Incluye Chromium real y los dos reportes PDF binarios,
 incluida la guía por despacho con diferencias de recepción.

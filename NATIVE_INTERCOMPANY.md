@@ -1,4 +1,4 @@
-# Compatibilidad nativa y privada — 19.0.3.0.0
+# Compatibilidad nativa y privada — 19.0.3.1.0
 
 ## Estado
 
@@ -9,40 +9,37 @@ certifica esa instalación. No se ha desplegado ni cambiado producción.
 
 ## Automatismo interempresa Enterprise
 
-Community referencia `account_inter_company_rules` en `base_setup` como
-mecanismo de generación de ventas/compras entre compañías. Su implementación
-no está en el código disponible. No se ha verificado ningún hook, contexto de
-omisión o método generador Enterprise.
+En 19.0.3.0.0 la presencia de `account_inter_company_rules` bloqueaba la
+activación. Ese es el error de validación mostrado por el usuario; su configuración
+central no llegaba a guardarse como activa. No era una falta de permisos de Angelo.
 
-Este addon crea **ambos** documentos y los confirma mediante acciones estándar.
-Si otro automatismo genera la contraparte al confirmar, podría duplicarlos. Por
-eso `_assert_supported()` bloquea habilitar/usar el flujo y confirmar/aprobar
-sus órdenes cuando `account_inter_company_rules` está instalado, pendiente de
-actualización o pendiente de eliminación. Las órdenes ordinarias no se someten
-a este guardia específico del abastecimiento.
+Desde 19.0.3.1.0 se admiten dos modos:
 
-**El bloqueo sigue vigente.** No desinstalar el módulo Enterprise, falsear su
-estado, quitar el guardia ni inventar flags para superarlo. Antes de habilitar
-la instalación real, obtener en una copia de pruebas:
+- Sin el módulo nativo instalado: el servicio crea una OC y una OV vinculadas.
+- Con el módulo nativo instalado: el servicio crea **solo la OC** y deja que Odoo
+  genere su OV al confirmarla. Un adaptador observa `sale.order.create` y
+  `sale.order.line.create` durante esa transacción privada, valida compañía,
+  cliente, productos, cantidades y precios y enlaza la única contraparte.
+  Admite líneas anidadas y creación separada de cabecera y líneas.
 
-1. Revisión exacta y código completo de `account_inter_company_rules` y de los
-   addons que lo heredan, con sus manifests y dependencias.
-2. Configuración de generación/sincronización, usuarios y compañías utilizados,
-   así como opciones de confirmación, aprobación y validación.
-3. Extensiones y automatizaciones de Compras, Ventas e Inventario que creen,
-   confirmen o sincronicen documentos y operaciones.
-4. Mapa real de compañías, contactos comerciales, impuestos, monedas, almacenes,
-   operaciones, rutas, ubicaciones y usuarios de sucursal/Logística.
+Configurar el automatismo de **Industria** para generar ventas a partir de compras
+de otras compañías, con su usuario interempresa existente autorizado. La dirección
+contraria, una regla inactiva o permisos nativos insuficientes hacen fallar el envío.
+No se cambian las opciones de las compañías, usuarios ni automatizaciones globales.
+No se inventan hooks/flags privados ni se suprime el motor de Odoo.
 
-Con esa evidencia se necesita un adaptador auditado y pruebas de unicidad al
-confirmar/aprobar ambos documentos, reintentar, operar concurrentemente,
-cancelar y registrar Inventario. Simular la presencia del módulo para comprobar
-que el guardia bloquea **no es probar Enterprise**.
+Si no aparece una única OV válida, se revierte toda la operación y se informa del
+error; no se registra un éxito con un pedido incompleto. Se rechazan otra OC, otra
+OV, facturas automáticas, validaciones físicas anticipadas y términos comerciales
+alterados. El adaptador no se activa mediante claves JSON-RPC del contexto.
+Los módulos pendientes de actualización/eliminación siguen bloqueando el flujo.
 
-El servicio también revierte la operación si una extensión genera facturas o
-valida cantidades físicas durante su confirmación comercial. Esos controles no
-reemplazan la revisión de automatizaciones privadas ni garantizan ausencia de
-efectos externos ajenos a la transacción de base de datos.
+**Límite de la evidencia:** las pruebas locales ejecutan Odoo Community real y un
+contrato que simula la salida ORM del motor nativo. No ejecutan el módulo Enterprise
+que no está incluido en el ZIP. Por ello aún hay que comprobar una transacción en
+la copia real con sus reglas/usuario interempresa. El runtime valida el resultado;
+si esa instalación produce una forma no admitida, se rechaza sin documentos
+parciales. Esto no garantiza ausencia de efectos externos de otros automatismos.
 
 ## Fabricación privada conocida
 
@@ -97,23 +94,21 @@ salidas parciales es requisito de configuración.
 
 ## Módulo de solicitudes internas con QR
 
-El ZIP operativo recibido el 22/10/2026 incorpora `alvina_stock_request`, distinto
-del addon de sucursales. Su `models/stock.py` declara
-`stock.move.alvina_request_line_id` como relación a `alvina.stock.request.line`.
-Este addon declara el mismo nombre de campo como relación a
-`alvina.branch.request.line` en `models/fulfillment.py`.
+El ZIP incorpora `alvina_stock_request`, distinto del addon de sucursales.
+Ambos usaban antes `stock.move.alvina_request_line_id` para modelos diferentes.
+Desde 19.0.3.1.0 sucursales usa `alvina_branch_request_line_id`; QR conserva su
+campo y su modelo originales. Las relaciones de líneas de OC/OV conservan sus
+nombres porque no colisionan con QR.
 
-Si ambos módulos están instalados, no se pueden tratar sus líneas como si fueran
-el mismo modelo. Hay riesgo de sobrescritura de la definición por orden de carga,
-relaciones/validaciones incompatibles y bloqueo de operaciones QR o de sucursales.
-No se ha resuelto ni migrado esa coexistencia en 19.0.3.0.0. Se necesita separar
-los nombres y revisar el esquema y datos reales antes de una migración; no
-reasignar claves ni borrar movimientos para evitar el conflicto.
+La migración conserva la columna anterior de QR cuando el módulo está instalado.
+Solo acepta enlaces históricos identificables por producto y solicitud QR del
+picking; ante una mezcla ambigua se detiene y conserva los registros para revisión.
+Sin QR, renombra el campo anterior de sucursales y conserva sus valores. No borra
+ni reasigna movimientos entre modelos por coincidencia de IDs.
 
-Este hallazgo no es la causa del `UndefinedColumn` de `stock.picking` reportado.
-La recuperación del esquema de Ventas y la compatibilidad de ambos módulos son
-comprobaciones diferentes. No habilitar ambos flujos como si esa integración
-estuviera certificada.
+La recuperación previa de `stock.picking.alvina_dispatch_id` es otra cuestión:
+requiere aplicar el manifest completo y ejecutar la actualización de la app;
+un reinicio por sí solo no crea su esquema. Esta entrega incluye ambos arreglos.
 
 ## Variante anterior con esquema diferente
 

@@ -1,4 +1,4 @@
-# Guía de uso y configuración — 19.0.3.0.0
+# Guía de uso y configuración — 19.0.3.1.0
 
 **La sucursal compra desde Compras. Logística de Industria atiende desde Ventas.**
 Odoo genera y vincula ambos documentos y prepara las operaciones de Inventario.
@@ -100,7 +100,10 @@ si se van a manejar entregas parciales.
 
 El campo heredado **Crear solicitud de cotización** no decide si una sucursal
 participa cuando el flujo central está activo: todas siguen el mismo flujo.
-La nueva configuración no crea OC/OV para requerimientos enviados anteriormente.
+La actualización no crea documentos retroactivos. Para un requerimiento anterior
+pendiente y sin OC/OV, su solicitante puede abrirlo y pulsar **Enviar a Industria**
+una vez guardada la configuración activa. Conserva referencia, fecha y cantidades;
+los documentos nuevos usan la lista central seleccionada, con la fecha original del requerimiento.
 
 Si la compañía operativa del local es la misma Industria, detener la activación
 y revisar la operación interna pendiente. No crear otra compañía para sortear
@@ -123,6 +126,12 @@ Activar y probar en una copia representativa solo cuando esos controles estén
 resueltos. El número de versión de Aplicaciones muestra el código localizado;
 por sí solo no demuestra que se hayan aplicado cambios de base. Seguir la
 actualización dirigida de [README.md](README.md), sin desinstalar.
+
+Si está instalado el automatismo interempresa, configurar en Industria la creación
+de ventas desde compras de otras compañías. El servicio usa esa OV; no crea una
+segunda. Si falta la regla, el usuario recibe un error y no quedan documentos
+parciales. Guardar **Activar flujo de abastecimiento** y comprobar un envío en la
+copia real, con su usuario interempresa autorizado.
 
 ## 5. Sucursal: hacer el pedido
 

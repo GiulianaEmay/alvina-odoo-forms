@@ -50,20 +50,19 @@ class SupplyConfiguration(models.Model):
         return self.sudo().search([('key', '=', 'industry')], limit=1)
 
     def _assert_supported(self):
-        """An audited integration addon must adapt native automation explicitly.
-
-        Community advertises account_inter_company_rules, but its Enterprise
-        hooks are not part of the available source. Guessing a context flag could
-        create duplicate documents after confirmation, so this case fails closed.
-        """
+        """Installed native automation is consumed via its actual PO result."""
         self.ensure_one()
         if self.env['ir.module.module'].sudo().search_count([
                 ('name', '=', 'account_inter_company_rules'),
-                ('state', 'in', ['installed', 'to upgrade', 'to remove'])]):
+                ('state', 'in', ['to upgrade', 'to remove'])]):
             raise ValidationError(_(
-                'Está instalado el automatismo interempresa de Odoo. Se necesita un adaptador '
-                'verificado antes de activar este flujo para evitar compras o ventas duplicadas.'))
+                'Complete la actualización o eliminación pendiente del automatismo '
+                'interempresa de Odoo antes de activar el abastecimiento.'))
         return True
+
+    def _native_intercompany_installed(self):
+        return bool(self.env['ir.module.module'].sudo().search_count([
+            ('name', '=', 'account_inter_company_rules'), ('state', '=', 'installed')]))
 
     def _get_sales_responsible(self):
         """Resolve an explicit assignee, or one unambiguous authorized successor.

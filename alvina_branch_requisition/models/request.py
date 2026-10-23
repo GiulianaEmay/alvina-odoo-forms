@@ -13,17 +13,17 @@ class BranchRequest(models.Model):
     _order = 'request_date desc, id desc'
     _check_company_auto = True
 
-    name = fields.Char(default='Nuevo', readonly=True, copy=False)
-    user_id = fields.Many2one('res.users', required=True, default=lambda self: self.env.user, readonly=True)
-    branch_id = fields.Many2one('alvina.branch.binding', required=True, check_company=True, ondelete='restrict')
+    name = fields.Char(string='Referencia', default='Nuevo', readonly=True, copy=False)
+    user_id = fields.Many2one('res.users', string='Solicitante', required=True, default=lambda self: self.env.user, readonly=True)
+    branch_id = fields.Many2one('alvina.branch.binding', string='Sucursal', required=True, check_company=True, ondelete='restrict')
     company_id = fields.Many2one(related='branch_id.company_id', store=True, string='Empresa solicitante')
     supply_company_id = fields.Many2one(related='branch_id.supply_company_id', store=True, string='Empresa abastecedora')
     warehouse_id = fields.Many2one(related='branch_id.warehouse_id', store=True, string='Almacén abastecedor')
-    request_date = fields.Datetime(default=fields.Datetime.now, required=True, readonly=True)
-    required_date = fields.Date(required=True, default=lambda self: self._minimum_required_date())
-    note = fields.Text()
+    request_date = fields.Datetime(string='Fecha de solicitud', default=fields.Datetime.now, required=True, readonly=True)
+    required_date = fields.Date(string='Fecha requerida', required=True, default=lambda self: self._minimum_required_date())
+    note = fields.Text(string='Observaciones')
     state = fields.Selection([('pending', 'Pendiente'), ('review', 'En revisión'),
-        ('partial', 'Parcialmente atendido'), ('done', 'Atendido'), ('cancel', 'Cancelado')], default='pending', required=True, readonly=True)
+        ('partial', 'Parcialmente atendido'), ('done', 'Atendido'), ('cancel', 'Cancelado')], string='Estado', default='pending', required=True, readonly=True)
     line_ids = fields.One2many('alvina.branch.request.line', 'request_id', copy=False)
     currency_id = fields.Many2one(related='company_id.currency_id', store=True, string='Moneda')
     amount_total = fields.Monetary(compute='_compute_amount_total', store=True, string='Valor solicitado')
@@ -92,6 +92,14 @@ class BranchRequest(models.Model):
     def write(self, vals):
         raise AccessError(_('Los requerimientos enviados son inmutables; use las acciones autorizadas.'))
 
+    def _set_supply_configuration(self, configuration):
+        """Only the authorized send service calls this inside its savepoint."""
+        self.ensure_one()
+        return super(BranchRequest, self.sudo()).write({
+            'supply_flow': True, 'supply_config_id': configuration.id,
+            'operation_mode': 'intercompany',
+        })
+
     def unlink(self):
         raise AccessError(_('Archive la sucursal o cancele el requerimiento; no elimine su historial.'))
 
@@ -122,11 +130,11 @@ class RequestLine(models.Model):
     company_id = fields.Many2one(related='request_id.company_id', store=True, string='Empresa solicitante')
     supply_company_id = fields.Many2one(related='request_id.supply_company_id', store=True, string='Empresa abastecedora')
     warehouse_id = fields.Many2one(related='request_id.warehouse_id', store=True, string='Almacén abastecedor')
-    product_id = fields.Many2one('product.product', required=True)
-    product_uom_id = fields.Many2one('uom.uom', required=True, readonly=True, ondelete='restrict')
-    product_qty = fields.Float(required=True, digits='Product Unit')
+    product_id = fields.Many2one('product.product', string='Producto', required=True)
+    product_uom_id = fields.Many2one('uom.uom', string='Unidad', required=True, readonly=True, ondelete='restrict')
+    product_qty = fields.Float(string='Cantidad solicitada', required=True, digits='Product Unit')
     qty_supplied = fields.Float(default=0, readonly=True, digits='Product Unit')
-    qty_pending = fields.Float(compute='_compute_pending', store=True, digits='Product Unit')
+    qty_pending = fields.Float(string='Pendiente por despachar', compute='_compute_pending', store=True, digits='Product Unit')
     currency_id = fields.Many2one(related='request_id.currency_id', store=True, string='Moneda')
     price_unit = fields.Float(string='Precio de venta registrado', readonly=True, digits='Product Price')
     price_snapshot_set = fields.Boolean(default=False, readonly=True, string='Precio registrado al solicitar')

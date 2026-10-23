@@ -151,11 +151,12 @@ class TestCommercialFlow(SupplyCompanyFixture, TransactionCase):
         for model, count in counts.items():
             self.assertEqual(self.env[model].search_count([]), count)
 
-    def test_native_intercompany_guard_has_no_invented_bypass(self):
+    def test_pending_native_module_upgrade_blocks_activation_and_submission(self):
         Module = type(self.env['ir.module.module'])
         original = Module.search_count
         def installed(modules, domain, *args, **kwargs):
-            if ('name', '=', 'account_inter_company_rules') in domain:
+            if (('name', '=', 'account_inter_company_rules') in domain
+                    and ('state', 'in', ['to upgrade', 'to remove']) in domain):
                 return 1
             return original(modules, domain, *args, **kwargs)
         with patch.object(Module, 'search_count', installed):
@@ -174,13 +175,15 @@ class TestCommercialFlow(SupplyCompanyFixture, TransactionCase):
         self.branch_company.write({'po_double_validation': 'two_step', 'po_double_validation_amount': 0})
         purchase.button_confirm()
         self.assertEqual(purchase.state, 'to approve')
-        # Simulate enabling the native module after the pair was created. Do
-        # not install an Enterprise placeholder or guess its confirmation hook.
+        # Simulate an installed native module after the pair was created.
+        # Confirmation must require the private capability even when no module
+        # upgrade is pending; an RPC context cannot supply that capability.
         Module = type(self.env['ir.module.module'])
         original = Module.search_count
 
         def installed(modules, domain, *args, **kwargs):
-            if ('name', '=', 'account_inter_company_rules') in domain:
+            if (('name', '=', 'account_inter_company_rules') in domain
+                    and ('state', '=', 'installed') in domain):
                 return 1
             return original(modules, domain, *args, **kwargs)
 

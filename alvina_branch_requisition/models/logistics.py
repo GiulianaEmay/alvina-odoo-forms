@@ -1,6 +1,7 @@
 """A reusable sales role bounded to real branch supplies, including analysis."""
 from odoo import api, fields, models, _
 from odoo.exceptions import AccessError
+from .supply_context import native_sale_expected
 
 
 class BranchBindingLogistics(models.Model):
@@ -31,7 +32,7 @@ class SaleOrderLogistics(models.Model):
     def create(self, vals_list):
         # Rules also protect create, but fail before defaulting/computations:
         # this role prepares branch orders created by the validated service.
-        if not self.env.su and self.env.user.has_group(
+        if not self.env.su and not native_sale_expected() and self.env.user.has_group(
                 'alvina_branch_requisition.group_industry_logistics'):
             raise AccessError(_(
                 'Logística atiende las ventas generadas por los requerimientos de '

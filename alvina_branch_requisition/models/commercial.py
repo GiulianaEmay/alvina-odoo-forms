@@ -1,7 +1,7 @@
 """Uniform, explicitly configured Industria supply business service.
 
-No native Enterprise bypass is guessed. An audited adapter must handle native
-automation before this service can be enabled alongside it.
+Native automation supplies the supplier sale through standard ORM creation.
+No native omission flag, private hook or company setting is guessed or changed.
 """
 import math
 from contextvars import ContextVar
@@ -9,6 +9,7 @@ from datetime import datetime, time
 
 from odoo import api, Command, fields, models, _
 from odoo.exceptions import AccessError, UserError, ValidationError
+from .supply_context import NATIVE_SUPPLY
 
 
 # A client-supplied context value cannot confer technical approval. The scope is
@@ -40,9 +41,41 @@ class BranchRequest(models.Model):
         for rec in self:
             rec.sale_order_id = rec.sale_order_ids[:1]
 
+    def action_send_to_industry(self):
+        """Recover an unfulfilled pending request without duplicating its form."""
+        self.ensure_one()
+        self.check_access('read')
+        if (self.env.uid != self.user_id.id
+                or self.env.uid not in self.branch_id.sudo().user_ids.ids
+                or self.company_id not in self.env.companies
+                or not self.env.user.has_group('alvina_branch_requisition.group_requester')):
+            raise AccessError(_('El envío corresponde al usuario solicitante autorizado de esta sucursal.'))
+        with self.env.cr.savepoint():
+            self.env.cr.execute('SELECT id FROM alvina_branch_request WHERE id = %s FOR UPDATE', [self.id])
+            self.invalidate_recordset(['supply_flow', 'state', 'sale_order_id', 'purchase_order_id'])
+            history = self.sudo()
+            if history.supply_flow and history.sale_order_id and history.purchase_order_id:
+                return {'type': 'ir.actions.client', 'tag': 'reload'}
+            if (self.state != 'pending' or history.sale_order_id or history.purchase_order_id
+                    or any(line.qty_supplied or line.qty_received or line.qty_cancelled for line in history.line_ids)):
+                raise ValidationError(_(
+                    'Solo se puede enviar un requerimiento pendiente sin documentos '
+                    'comerciales, entregas, recepciones ni cierres previos.'))
+            configuration = self.env['alvina.supply.configuration']._get_configuration()
+            if not configuration or not configuration.enabled:
+                raise ValidationError(_('El administrador debe habilitar y guardar el abastecimiento de Industria.'))
+            configuration._validate_for_branch(self.branch_id)
+            self._set_supply_configuration(configuration)
+            self._create_supply_documents()
+            return {'type': 'ir.actions.client', 'tag': 'reload'}
+
     def _submission_values(self, branch):
         values = super()._submission_values(branch)
         configuration = self.env['alvina.supply.configuration']._get_configuration()
+        if configuration and not configuration.enabled:
+            raise ValidationError(_(
+                'El abastecimiento de Industria está desactivado. No se ha enviado el '
+                'pedido ni generado una compra o venta. Avise al administrador.'))
         if configuration and configuration.enabled:
             configuration._validate_for_branch(branch)
             values.update(supply_flow=True, supply_config_id=configuration.id,
@@ -98,7 +131,7 @@ class BranchRequest(models.Model):
                    'tracking_disable': True, 'mail_create_nosubscribe': True, 'mail_create_nolog': True}
         sales = self.env['sale.order'].sudo().with_context(context).with_company(supplier)
         customer = self.company_id.sudo().partner_id
-        sale = sales.create({
+        sale_values = {
             'alvina_branch_request_id': self.id, 'company_id': supplier.id,
             'partner_id': customer.id, 'partner_invoice_id': customer.id,
             'partner_shipping_id': customer.id, 'warehouse_id': self.warehouse_id.id,
@@ -110,7 +143,11 @@ class BranchRequest(models.Model):
                 'alvina_request_line_id': line.id, 'product_id': line.product_id.id,
                 'product_uom_id': line.product_uom_id.id, 'product_uom_qty': line.product_qty,
             }) for line in self.line_ids],
-        })
+        }
+        native = configuration._native_intercompany_installed()
+        # Price with standard virtual sale records; native mode must not create
+        # a second supplier sale before Odoo generates the counterpart.
+        sale = sales.new(sale_values) if native else sales.create(sale_values)
         # Let sale's standard pricelist, discounts, fiscal position and tax
         # computation produce the commercial terms. Copy its effective unit
         # price to the buyer's currency using the buyer's configured rates.
@@ -149,8 +186,85 @@ class BranchRequest(models.Model):
             'state': 'draft', 'user_id': False, 'origin': self.name,
             'date_order': self.request_date, 'order_line': commands,
         })
+        if native:
+            return self._confirm_native_supply(purchase, sale, sale_values)
         self._confirm_supply_documents(sale, purchase)
         return sale
+
+    def _confirm_native_supply(self, purchase, priced_sale, sale_values):
+        self._check_supply_actor()
+        header = {key: value for key, value in sale_values.items()
+                  if key not in ('order_line', 'state', 'date_order', 'origin')}
+        scope = {
+            'request_id': self.id, 'purchase_id': purchase.id,
+            'sale_id': None, 'attempts': 0, 'invalid': False, 'phase': 'purchase',
+            'seen_lines': set(),
+            'sale_header': header,
+            'sale_lines': {line.alvina_request_line_id.id: {
+                'alvina_request_line_id': line.alvina_request_line_id.id,
+                'product_id': line.product_id.id, 'product_uom_id': line.product_uom_id.id,
+                'product_uom_qty': line.product_uom_qty, 'name': line.name,
+                'price_unit': line.price_unit, 'discount': line.discount,
+                'tax_ids': [Command.set(line.tax_ids.ids)],
+            } for line in priced_sale.order_line},
+        }
+        token = NATIVE_SUPPLY.set(scope)
+        try:
+            self._approve_supply_purchase(purchase)
+            if not scope['sale_id']:
+                raise ValidationError(_(
+                    'Odoo no generó la venta de Industria al confirmar la compra. '
+                    'Revise en los ajustes interempresa de Industria la generación '
+                    'de ventas a partir de compras de otras compañías. '
+                    'No se ha registrado el pedido ni documentos incompletos.'))
+            sale = self.env['sale.order'].sudo().with_context(
+                allowed_company_ids=self.supply_company_id.ids).browse(scope['sale_id'])
+            if scope['seen_lines'] != set(self.line_ids.ids):
+                raise ValidationError(_('La venta nativa no incluye todos los productos solicitados.'))
+            scope['phase'] = 'sale'
+            if sale.state in ('draft', 'sent'):
+                sale.action_confirm()
+            if scope['invalid'] or scope['attempts'] != 1:
+                raise ValidationError(_('El automatismo no produjo una única pareja de compra y venta.'))
+            # Check terms after all native creation/confirmation overrides.
+            if (sale.user_id.id != header['user_id']
+                    or sale.pricelist_id.id != header['pricelist_id']):
+                raise ValidationError(_('La venta nativa cambió el responsable o la lista de precios de Industria.'))
+            for line in sale.order_line.filtered(lambda row: not row.display_type):
+                expected = scope['sale_lines'].get(line.alvina_request_line_id.id)
+                if (not expected
+                        or not math.isclose(line.price_unit, expected['price_unit'], abs_tol=1e-8)
+                        or not math.isclose(line.discount, expected['discount'], abs_tol=1e-8)
+                        or set(line.tax_ids.ids) != set(expected['tax_ids'][0][2])):
+                    raise ValidationError(_('La venta nativa cambió los precios o impuestos acordados. Se revierte el envío.'))
+            self._check_confirmed_supply_pair(sale, purchase)
+            return sale
+        finally:
+            NATIVE_SUPPLY.reset(token)
+
+    def _approve_supply_purchase(self, purchase):
+        purchase.button_confirm()
+        if purchase.state == 'to approve':
+            token = _AUTOMATED_PURCHASE_APPROVAL.set(frozenset(purchase.ids))
+            try:
+                purchase.button_approve()
+            finally:
+                _AUTOMATED_PURCHASE_APPROVAL.reset(token)
+
+    def _check_confirmed_supply_pair(self, sale, purchase):
+        if (sale.state != 'sale' or purchase.state != 'purchase'
+                or sale.alvina_branch_request_id.id != self.id
+                or purchase.alvina_branch_request_id.id != self.id
+                or sale.company_id != self.supply_company_id
+                or purchase.company_id != self.company_id):
+            raise ValidationError(_('No se confirmó una única compra y venta de las compañías del requerimiento.'))
+        if (sale.invoice_ids or purchase.invoice_ids
+                or any(p.state == 'done' for p in sale.picking_ids | purchase.picking_ids)):
+            raise ValidationError(_('Un automatismo externo facturó o validó existencias. Se revierte el envío.'))
+        product_lines = sale.order_line.filtered(lambda line: not line.display_type)
+        if (len(product_lines) != len(self.line_ids)
+                or set(product_lines.alvina_request_line_id.ids) != set(self.line_ids.ids)):
+            raise ValidationError(_('La venta no conserva todas las líneas del requerimiento.'))
 
     def _confirm_supply_documents(self, sale, purchase):
         """Confirm only this validated pair; physical validation stays manual."""
@@ -169,16 +283,7 @@ class BranchRequest(models.Model):
         self.supply_config_id.sudo()._assert_supported()
         try:
             sale.action_confirm()
-            purchase.button_confirm()
-            if purchase.state == 'to approve':
-                # Core button_approve rechecks _approval_allowed even with
-                # force=True. Grant technical approval to this one ID, without
-                # changing the company's policy or giving the actor a role.
-                token = _AUTOMATED_PURCHASE_APPROVAL.set(frozenset(purchase.ids))
-                try:
-                    purchase.button_approve()
-                finally:
-                    _AUTOMATED_PURCHASE_APPROVAL.reset(token)
+            self._approve_supply_purchase(purchase)
         except UserError as error:
             raise ValidationError(_(
                 'No se pudo confirmar el abastecimiento con su configuración actual: %(reason)s',
@@ -256,7 +361,12 @@ class SaleOrder(models.Model):
 
     def action_confirm(self):
         for order in self.filtered('alvina_branch_request_id'):
-            order.sudo().alvina_branch_request_id.supply_config_id._assert_supported()
+            configuration = order.sudo().alvina_branch_request_id.supply_config_id
+            configuration._assert_supported()
+            scope = NATIVE_SUPPLY.get()
+            if configuration._native_intercompany_installed() and (
+                    not scope or scope['request_id'] != order.alvina_branch_request_id.id):
+                raise ValidationError(_('La confirmación interempresa de este pedido la gestiona el servicio de abastecimiento.'))
         return super().action_confirm()
 
     def unlink(self):
@@ -282,6 +392,7 @@ class PurchaseOrder(models.Model):
         for order in self.filtered('alvina_branch_request_id'):
             if order.sudo().alvina_branch_request_id.supply_flow:
                 order.sudo().alvina_branch_request_id.supply_config_id._assert_supported()
+                order._check_native_confirmation_scope()
         return super().button_confirm()
 
     def button_approve(self, force=False):
@@ -290,7 +401,15 @@ class PurchaseOrder(models.Model):
         for order in self.filtered('alvina_branch_request_id'):
             if order.sudo().alvina_branch_request_id.supply_flow:
                 order.sudo().alvina_branch_request_id.supply_config_id._assert_supported()
+                order._check_native_confirmation_scope()
         return super().button_approve(force=force)
+
+    def _check_native_confirmation_scope(self):
+        self.ensure_one()
+        config = self.sudo().alvina_branch_request_id.supply_config_id
+        scope = NATIVE_SUPPLY.get()
+        if config._native_intercompany_installed() and (not scope or scope['purchase_id'] != self.id):
+            raise ValidationError(_('La confirmación de esta compra interempresa la gestiona el servicio de abastecimiento.'))
 
     @api.constrains('alvina_branch_request_id', 'picking_type_id')
     def _check_alvina_receipt_identity(self):

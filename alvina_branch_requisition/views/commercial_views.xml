@@ -35,6 +35,12 @@
         <field name="model">alvina.branch.request</field>
         <field name="inherit_id" ref="request_form"/>
         <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="action_send_to_industry" type="object" string="Enviar a Industria"
+                        class="btn-primary" groups="alvina_branch_requisition.group_requester"
+                        invisible="supply_flow or state != 'pending'"
+                        confirm="Se generará la compra y la venta con la lista de precios actual de Industria. Se conservará el requerimiento original."/>
+            </xpath>
             <xpath expr="//sheet" position="inside">
                 <group string="Flujo Industria" invisible="not supply_flow">
                     <field name="supply_flow" invisible="1"/>

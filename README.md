@@ -1,19 +1,20 @@
-# Alviña — Abastecimiento de sucursales — 19.0.3.0.0
+# Alviña — Abastecimiento de sucursales — 19.0.3.1.0
 
 Addon Odoo 19 `alvina_branch_requisition`. La sucursal solicita desde **Compras**;
 Industria atiende desde **Ventas**. Odoo vincula y confirma la OC y la OV para
 preparar Inventario. Las únicas confirmaciones operativas son el despacho real
 de Logística y la recepción real de la sucursal. No genera facturas.
 
-Entrega en `feature/logistics-branch-sales-only`, separada de las ramas
-anteriores. Publicar esta rama en GitHub no instala ni actualiza Odoo.
+Corrección publicada en `fix/native-supply-qr-compatibility`, sobre la entrega
+de Logística anterior. Publicar esta rama en GitHub no instala ni actualiza Odoo.
 **No se ha desplegado en producción.** La configuración nace desactivada.
 
 ## Documentación actual
 
+- [Qué fallaba, qué se corrigió y cómo completar la puesta en marcha](RELEASE_2026-10-23.md).
 - [Flujo y configuración para administrador, sucursal y Logística](OPERATING_FLOW.md).
 - [Diseño funcional, precios, seguridad e históricos](INTERCOMPANY_FLOW.md).
-- [Compatibilidad Enterprise, módulos privados y bloqueos](NATIVE_INTERCOMPANY.md).
+- [Compatibilidad nativa, módulos privados y límites](NATIVE_INTERCOMPANY.md).
 - [Validación y reproducción de pruebas](TESTING.md).
 - [Recuperación del incidente del 19/10/2026](RECOVERY_2026-10-19.md).
 - [Recuperación de Ventas y manifiesto incompleto del 22/10/2026](RECOVERY_2026-10-22.md).
@@ -23,7 +24,7 @@ Los documentos históricos `SUPPLY_COMPANIES.md`, `INTEGRATION.md` y `TRANSFER.m
 conservan antecedentes de entregas anteriores. Para el comportamiento de esta
 versión prevalecen las cuatro primeras guías de esta lista. Las referencias
 antiguas a OC/OV únicamente en borrador o a confirmaciones comerciales manuales
-no describen el flujo central de 19.0.3.0.0.
+no describen el flujo central de 19.0.3.1.0.
 
 ## Qué cambia
 
@@ -45,8 +46,10 @@ el formulario de insumos de este addon es `/branch/requisition/new`.
 ## Límites antes de activar
 
 Se valida sobre Odoo 19 Community. **No equivale a certificar la instalación real
-Enterprise de Alviña.** El flujo está bloqueado si está instalado el automatismo
-Enterprise `account_inter_company_rules`, hasta contar con un adaptador auditado.
+Enterprise de Alviña.** Con `account_inter_company_rules` instalado, el nuevo
+adaptador enlaza la OV generada por Odoo al confirmar la OC. Hace falta configurar
+en Industria esa dirección nativa y comprobarla en la copia real; las pruebas
+locales de contrato no ejecutan Enterprise. Ver [revisión y puesta en marcha](RELEASE_2026-10-23.md).
 También está bloqueada la operación cuando compradora e Industria son la misma
 compañía. No se crean empresas ficticias para eludirlo.
 

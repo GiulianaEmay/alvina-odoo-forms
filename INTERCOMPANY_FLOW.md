@@ -1,4 +1,4 @@
-# Flujo de abastecimiento — 19.0.3.0.0
+# Flujo de abastecimiento — 19.0.3.1.0
 
 ## Procedimiento único
 
@@ -165,16 +165,18 @@ físicas/reservas del almacén. Es una consulta, no una asignación exclusiva de
 entradas ni un motor de aprovisionamiento por ventanas de tiempo.
 
 Se conserva la migración 19.0.2.0.0, que protege lo atendido anterior en
-`legacy_qty_supplied`. La versión 19.0.3.0.0 no convierte requerimientos antiguos
+`legacy_qty_supplied`. La versión 19.0.3.1.0 no convierte requerimientos antiguos
 en nuevas parejas OC/OV ni crea guías históricas, precios, compañías o
 movimientos retroactivos. La configuración central no se crea ni activa sola.
 Identificar el commit instalado antes de actualizar: la variante alternativa
 con `keeper_ids` requiere su propio mapeo.
 
-## Integración pendiente
+## Integración y límites
 
-El automatismo Enterprise instalado, la misma compañía en ambos extremos y
-productos que disparen fabricación privada siguen bloqueados. La edición de
+El automatismo Enterprise instalado se integra mediante la OC y su OV nativa;
+requiere la dirección de generación y usuario correctos. Las pruebas locales
+cubren su contrato ORM, no la instalación Enterprise real. La misma compañía en
+ambos extremos y productos que disparen fabricación privada siguen bloqueados. La edición de
 líneas del módulo privado de ventas requiere una integración comprobada.
 Detalles y evidencia: [NATIVE_INTERCOMPANY.md](NATIVE_INTERCOMPANY.md) y
 [TESTING.md](TESTING.md). No se ha autorizado ni ejecutado despliegue en producción.

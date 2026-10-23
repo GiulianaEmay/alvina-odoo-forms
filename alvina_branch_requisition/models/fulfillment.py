@@ -65,7 +65,7 @@ class RequestLineFulfillment(models.Model):
         string='Líneas de compra vinculadas',
         groups='alvina_branch_requisition.group_keeper')
     internal_move_ids = fields.One2many(
-        'stock.move', 'alvina_request_line_id', readonly=True,
+        'stock.move', 'alvina_branch_request_line_id', readonly=True,
         string='Movimientos internos vinculados',
         groups='alvina_branch_requisition.group_keeper')
     cancellation_ids = fields.One2many(
@@ -224,29 +224,29 @@ class RequestLineFulfillment(models.Model):
 class StockMove(models.Model):
     _inherit = 'stock.move'
 
-    alvina_request_line_id = fields.Many2one(
+    alvina_branch_request_line_id = fields.Many2one(
         'alvina.branch.request.line', string='Detalle de requerimiento Alviña',
         readonly=True, copy=True, index=True, ondelete='restrict')
 
     @api.model
     def _prepare_merge_moves_distinct_fields(self):
-        return super()._prepare_merge_moves_distinct_fields() + ['alvina_request_line_id']
+        return super()._prepare_merge_moves_distinct_fields() + ['alvina_branch_request_line_id']
 
     @api.model_create_multi
     def create(self, vals_list):
-        if not self.env.su and any(values.get('alvina_request_line_id', self.env.context.get('default_alvina_request_line_id')) for values in vals_list):
+        if not self.env.su and any(values.get('alvina_branch_request_line_id', self.env.context.get('default_alvina_branch_request_line_id')) for values in vals_list):
             raise AccessError(_('El movimiento interno vinculado lo prepara el servicio de abastecimiento.'))
         return super().create(vals_list)
 
     def write(self, vals):
-        if 'alvina_request_line_id' in vals:
+        if 'alvina_branch_request_line_id' in vals:
             raise AccessError(_('No se permite reasignar el origen de un movimiento interno.'))
         return super().write(vals)
 
-    @api.constrains('alvina_request_line_id', 'company_id', 'product_id')
+    @api.constrains('alvina_branch_request_line_id', 'company_id', 'product_id')
     def _check_alvina_internal_identity(self):
         for move in self:
-            line = move.sudo().alvina_request_line_id
+            line = move.sudo().alvina_branch_request_line_id
             if line and (not line.request_id.supply_flow
                          or line.request_id.operation_mode != 'internal'
                          or move.company_id != line.supply_company_id
@@ -260,7 +260,7 @@ class StockMove(models.Model):
         # silently manufacture stock in the source location.
         quantities = {}
         for move in self:
-            line = move.sudo().sale_line_id.alvina_request_line_id or move.sudo().alvina_request_line_id
+            line = move.sudo().sale_line_id.alvina_request_line_id or move.sudo().alvina_branch_request_line_id
             if not line or not line.request_id.supply_flow or not move.product_id.is_storable:
                 continue
             for detail in move.move_line_ids:
@@ -296,12 +296,12 @@ class StockPicking(models.Model):
 
     @api.depends('move_ids.sale_line_id.alvina_request_line_id',
                  'move_ids.purchase_line_id.alvina_request_line_id',
-                 'move_ids.alvina_request_line_id')
+                 'move_ids.alvina_branch_request_line_id')
     def _compute_alvina_requests(self):
         for picking in self:
             lines = (picking.move_ids.sale_line_id.alvina_request_line_id
                      | picking.move_ids.purchase_line_id.alvina_request_line_id
-                     | picking.move_ids.alvina_request_line_id)
+                     | picking.move_ids.alvina_branch_request_line_id)
             picking.alvina_request_ids = lines.request_id
             picking.alvina_branch_names = ', '.join(lines.request_id.branch_id.mapped('name'))
 
