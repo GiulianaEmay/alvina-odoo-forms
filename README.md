@@ -5,8 +5,11 @@ Industria atiende desde **Ventas**. Odoo vincula y confirma la OC y la OV para
 preparar Inventario. Las únicas confirmaciones operativas son el despacho real
 de Logística y la recepción real de la sucursal. No genera facturas.
 
-Corrección publicada en `fix/native-supply-qr-compatibility`, sobre la entrega
-de Logística anterior. Publicar esta rama en GitHub no instala ni actualiza Odoo.
+La versión vigente se mantiene en **`main`**. Usar esa rama para transferir el
+módulo completo a Odoo; incluye las correcciones anteriores de Logística,
+manifest, integración interempresa y compatibilidad QR. Las ramas anteriores
+conservan el historial y no son versiones adicionales que deban instalarse.
+Publicar en GitHub no instala ni actualiza Odoo.
 **No se ha desplegado en producción.** La configuración nace desactivada.
 
 ## Documentación actual

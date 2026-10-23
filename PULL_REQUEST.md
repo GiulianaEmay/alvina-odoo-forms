@@ -14,3 +14,6 @@ Validación, límites y aplicación: TESTING.md y RELEASE_2026-10-23.md. El moto
 Enterprise no viene en el ZIP: su contrato ORM se prueba sobre Community, pero la
 regla y el usuario reales aún necesitan una comprobación en la copia instalada.
 No se ha desplegado ni cambiado producción.
+
+La versión consolidada se distribuye desde `main`; no es necesario aplicar
+por separado las ramas anteriores de corrección.
